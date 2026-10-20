@@ -1,6 +1,0 @@
-{
-  "name": "opencode-local-api",
-  "private": true,
-  "type": "module",
-  "scripts": { "test": "node --test" }
-}

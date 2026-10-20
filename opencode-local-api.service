@@ -1,16 +1,14 @@
 [Unit]
-Description=OpenCode native local API for DeepSeek Harness
+Description=Minimal OpenCode local API relay
 After=network-online.target
 
 [Service]
 Type=exec
-WorkingDirectory=%h/Documents/Tools/opencode-local-api
-EnvironmentFile=%h/.config/opencode-local-api/environment
-Environment=OPENCODE_CONFIG=%h/Documents/Tools/opencode-local-api/opencode.json
-Environment=OPENCODE_CONFIG_DIR=%h/.config/opencode-local-api/opencode
+EnvironmentFile=@ENVIRONMENT@
+Environment=@ENVELOPE@
 UMask=0077
-ExecStart=%h/Documents/Tools/opencode-local-api/runtime/opencode serve --hostname 127.0.0.1 --port 4096
-ExecStartPost=/usr/bin/node %h/Documents/Tools/opencode-local-api/bootstrap.mjs
+ExecStart=@NODE@ @SERVER@
+ExecStartPost=@NODE@ @SERVER@ --check
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=90

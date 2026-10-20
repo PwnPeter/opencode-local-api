@@ -1,67 +1,84 @@
-# OpenCode local API → DeepSeek Harness
+# OpenCode local API
 
-API compatible OpenAI Chat Completions : **http://127.0.0.1:4097/v1**.
-Modèle autorisé : `deepseek-v4.1-flash-free`. Aucun modèle payant de secours.
+Relais OpenAI Chat Completions pour **DeepSeek Harness**, sur `http://127.0.0.1:4097/v1`.
+Modèle unique : `deepseek-v4.1-flash-free`, sans repli payant.
 
-Le plugin s'exécute dans le binaire officiel **OpenCode 1.19.3**. Chaque requête ouvre une session native temporaire et passe par son SDK et son transport habituels. Le Harness reçoit les réponses et exécute ses propres outils. Le hook `tool.execute.before` bloque l'exécution des outils dans OpenCode.
+Le relais fonctionne avec Node, sans dépendance npm et sans moteur OpenCode résident. À l'installation, le script télécharge temporairement le binaire officiel OpenCode, vérifie son SHA-256, extrait son protocole de requête puis teste une réponse, un appel d'outil et son résultat en streaming. Le binaire, ses dépendances et ses données temporaires sont ensuite supprimés. Seul le petit protocole nécessaire est conservé dans la configuration privée.
 
-Les requêtes HTTP directes avec de simples en-têtes OpenCode sont refusées par l'offre gratuite. Cette implémentation conserve le contexte et les définitions d'outils natifs nécessaires au parcours OpenCode ; aucune signature cryptographique n'est fabriquée. Les messages du Harness sont ajoutés au contexte natif, et ses définitions d'outils remplacent les définitions natives portant le même nom. Les sessions temporaires sont supprimées après chaque appel.
+## Installer et démarrer
 
-## Rangement
-
-- `../opencode/` : sources officielles, tag `v1.19.3`, commit `e3c4eb242585dcd77be1a867391b7c25fd47ce52`, laissées intactes.
-- `runtime/` : binaire officiel et archive de la release, exclus de Git.
-- `plugin.mjs`, `native.mjs`, `relay.mjs` : plugin, transport natif et validation HTTP.
-- `opencode.json` : configuration du processus dédié.
-- `dsh.patch.yml` : configuration du fournisseur Harness ; aucun secret.
-- `~/.config/opencode-local-api/environment` : clés locales, accès `0600` dans un répertoire `0700`.
-- `~/.config/opencode-local-api/backups/` : sauvegardes privées avant intégration au Harness.
-- `~/.config/systemd/user/opencode-local-api.service` : service installé.
-
-## Utilisation
-
-Le service démarre automatiquement avec la session utilisateur. Son API native sur `127.0.0.1:4096` est protégée par un mot de passe distinct ; le relais sur `127.0.0.1:4097` utilise un jeton Bearer distinct de la clé OpenCode.
+Linux avec une session **systemd utilisateur**, Node.js **22+**, Python **3.10+**, `curl` et `make`. Architectures prévues : x86_64 et ARM64 ; validation réelle effectuée sur Fedora x86_64.
 
 ```sh
-systemctl --user status opencode-local-api.service
-systemctl --user restart opencode-local-api.service
-journalctl --user -u opencode-local-api.service -n 30 --no-pager
+git clone https://github.com/PwnPeter/opencode-local-api.git
+cd opencode-local-api
+make install
 ```
 
-Le fournisseur Harness conserve l'identifiant `opencode` afin que les sessions existantes utilisent la route locale après rechargement du profil.
+Ce dépôt est privé : le propriétaire doit vous donner accès. `make install` demande votre propre clé API OpenCode, sans l'afficher. Pour une installation non interactive, fournir `OPENCODE_API_KEY` dans l'environnement. Aucun abonnement n'est ajouté par le relais ; l'accès au modèle reste soumis aux règles et quotas OpenCode.
+
+Le service démarre immédiatement puis automatiquement à chaque connexion utilisateur. Conserver le dossier du projet à son emplacement après installation ; après un déplacement, relancer `make install`.
+
+```sh
+make status
+make logs
+make restart
+make stop
+make start
+```
+
+## Après une mise à jour OpenCode
+
+```sh
+make refresh
+```
+
+Cette commande récupère la dernière version officielle et recommence l'extraction, les tests réels et le nettoyage. Il n'est pas nécessaire de garder une copie des sources OpenCode. Si le nouveau protocole échoue aux essais, le fichier fonctionnel et le service actuel sont conservés. Une évolution incompatible peut nécessiter une adaptation du relais ; le script refuse alors de remplacer le protocole.
+
+`make install` réutilise le protocole existant ; sur une première installation il utilise la version de référence **1.19.3**. `make verify` teste le protocole installé auprès du fournisseur. Ces trois commandes effectuent des requêtes au modèle gratuit. `make test` lance uniquement des tests locaux, sans clé ni connexion au fournisseur.
+
+## Brancher DeepSeek Harness
+
+Importer les blocs de `dsh.patch.yml` dans votre profil Harness, ou les passer à une commande ponctuelle :
 
 ```sh
 (
   set -a
-  . ~/.config/opencode-local-api/harness.env
-  dsh headless --patch ~/Documents/Tools/opencode-local-api/dsh.patch.yml \
-    'Reply exactly LOCAL_API_OK. Do not call tools.'
+  . "${XDG_CONFIG_HOME:-$HOME/.config}/opencode-local-api/harness.env"
+  dsh headless --patch ./dsh.patch.yml \
+    'Reply exactly RELAY_OK. Do not call tools.'
 )
 ```
 
-## Vérification
+Le fournisseur `opencode` utilise `http://127.0.0.1:4097/v1` et `OPENCODE_LOCAL_API_KEY`. Pour un Harness lancé par systemd, ajouter à son unité utilisateur, via `systemctl --user edit deepseek-harness.service` :
 
-Sans dépendances à installer :
+```ini
+[Unit]
+Wants=opencode-local-api.service
+After=opencode-local-api.service
 
-```sh
-cd ~/Documents/Tools/opencode-local-api
-node --test
+[Service]
+EnvironmentFile=%h/.config/opencode-local-api/harness.env
 ```
 
-Les tests utilisent des serveurs locaux pour l'authentification, la séparation des credentials, le SSE, les arguments d'outils, l'annulation et les erreurs partielles. La validation réelle utilise ensuite le modèle gratuit et un cycle `lookup_city` → résultat d'outil → réponse SSE.
+Adapter le chemin si `XDG_CONFIG_HOME` est personnalisé, puis exécuter `systemctl --user daemon-reload` et `systemctl --user restart deepseek-harness.service`.
+
+## Ce qui est conservé
+
+- Le code de ce dépôt et les tests, sans dépendance externe à installer.
+- `${XDG_CONFIG_HOME:-~/.config}/opencode-local-api/environment` : votre clé amont et un jeton local distinct.
+- `harness.env` : uniquement le jeton local à charger dans le Harness.
+- `envelope.json` : protocole extrait sans clé API.
+- L'unité `systemd/user/opencode-local-api.service` : lance seulement Node.
+
+La configuration est privée (`0700` pour le dossier, `0600` pour les fichiers). Aucun de ces fichiers locaux n'est publié. Chaque utilisateur du dépôt fournit sa propre clé. Le service écoute seulement sur `127.0.0.1` et exige le jeton local ; il ne journalise pas les messages ni les clés. Les requêtes transitent chez OpenCode et son fournisseur de modèle.
 
 ## Limites
 
-- Les requêtes sont sérialisées, car les hooks de ce SDK partagent leur configuration. Les sous-agents concurrents attendent leur tour.
-- Le contexte natif ajoute environ 15 000 tokens par appel. Le profil Harness réserve 20 000 tokens en déclarant une fenêtre de 180 000 tokens.
-- Les outils natifs restent visibles au modèle mais ne sont jamais exécutés par ce plugin ; le Harness peut refuser un nom qui ne fait pas partie de ses propres outils.
-- L'offre gratuite et ses contrôles restent dépendants d'OpenCode. Cette version est épinglée ; une mise à jour peut nécessiter une adaptation.
-- Le service ne journalise ni les requêtes du Harness ni les clés. Les réponses transitent chez OpenCode et son fournisseur de modèle.
+Le protocole conserve le contexte et les définitions d'outils natifs nécessaires au modèle gratuit, soit environ 7 800 tokens supplémentaires par requête avec la version de référence. Le profil Harness réserve une marge. Le relais n'exécute aucun outil : le Harness exécute les siens ; il peut refuser un outil natif qu'il ne connaît pas.
 
-## Sources
+Le relais reproduit le format de requête extrait et les identifiants natifs ; il ne fabrique aucune signature cryptographique. Le modèle gratuit et la compatibilité peuvent changer côté OpenCode. L'extraction initiale nécessite temporairement plusieurs centaines de Mo de disque et le moteur natif consomme de la mémoire pendant cette étape.
 
-- [Dépôt officiel et version utilisée](https://github.com/anomalyco/opencode/tree/v1.19.3)
-- [Serveur local OpenCode](https://opencode.ai/docs/server/)
-- [SDK natif et construction des requêtes](https://github.com/anomalyco/opencode/blob/v1.19.3/packages/opencode/src/session/llm/request.ts)
+Pour désinstaller le démarrage automatique : `systemctl --user disable --now opencode-local-api.service`. Retirer aussi la configuration du fournisseur dans votre Harness avant de supprimer le projet. Les clés et les éventuelles sauvegardes privées ne sont pas supprimées automatiquement.
 
-Pour arrêter le relais : `systemctl --user disable --now opencode-local-api.service`. Restaurer aussi le profil Harness depuis la sauvegarde privée avant de supprimer le fournisseur local.
+Sources : [OpenCode officiel](https://github.com/anomalyco/opencode), [version de référence](https://github.com/anomalyco/opencode/tree/v1.19.3). Le codec d'identifiants provient de `packages/schema/src/identifier.ts` sous licence MIT.

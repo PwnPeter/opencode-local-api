@@ -63,6 +63,16 @@ test('rejects paid models and malformed input without an upstream request', asyn
   assert.equal(requests.length, before)
 })
 
+test('bounds streamed request bodies even without content-length', async () => {
+  const before = requests.length
+  const oversized = new Request('http://127.0.0.1:4097/v1/chat/completions', {
+    method: 'POST', headers: { Authorization: 'Bearer local-test-token' }, duplex: 'half',
+    body: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(32 * 1024 * 1024 + 1)); controller.close() } }),
+  })
+  assert.equal((await handler()(oversized)).status, 413)
+  assert.equal(requests.length, before)
+})
+
 test('preserves messages, tool results, reasoning and parameters while separating credentials', async () => {
   const body = {
     model: 'deepseek-v4.1-flash-free', stream: false,

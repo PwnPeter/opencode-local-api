@@ -21,9 +21,14 @@ export function createHandler({ token, complete }) {
     let body
     try {
       if (Number(request.headers.get('content-length')) > MAX_BODY) return failure(413, 'Request too large')
-      const raw = await request.text()
-      if (Buffer.byteLength(raw) > MAX_BODY) return failure(413, 'Request too large')
-      body = JSON.parse(raw)
+      const chunks = []
+      let size = 0
+      for await (const chunk of request.body ?? []) {
+        size += chunk.byteLength
+        if (size > MAX_BODY) return failure(413, 'Request too large')
+        chunks.push(chunk)
+      }
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
     } catch {
       return failure(400, 'Invalid JSON')
     }
