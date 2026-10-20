@@ -1,0 +1,23 @@
+- id: llm-pi-ai
+  config:
+    providers:
+      opencode:
+        displayName: OpenCode local
+        api: openai-completions
+        baseURL: http://127.0.0.1:4097/v1
+        apiKeyEnv: OPENCODE_LOCAL_API_KEY
+        compat:
+          supportsDeveloperRole: false
+          maxTokensField: max_tokens
+          thinkingFormat: deepseek
+        models:
+          - id: deepseek-v4.1-flash-free
+            name: DeepSeek V4.1 Flash Free (OpenCode local)
+            contextWindow: 180000
+            maxTokens: 32000
+            input: [text, image]
+- id: agent-default-model
+  config:
+    provider: opencode
+    model: deepseek-v4.1-flash-free
+    reasoningEffort: high

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["file:///home/peterpan/Documents/Tools/opencode-local-api/plugin.mjs"],
+  "enabled_providers": ["opencode"],
+  "model": "opencode/deepseek-v4.1-flash-free",
+  "small_model": "opencode/deepseek-v4.1-flash-free",
+  "provider": { "opencode": { "whitelist": ["deepseek-v4.1-flash-free"] } },
+  "permission": { "*": "allow" },
+  "share": "disabled",
+  "autoupdate": false
+}
