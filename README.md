@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="#startup">Startup</a> ·
-  <a href="#docker">Docker</a> ·
+  <a href="#dockerpodman">Docker/Podman</a> ·
   <a href="#commands">Commands</a> ·
   <a href="#models">Models</a> ·
   <a href="#updates">Updates</a>
@@ -30,36 +30,40 @@ The relay runs on Node. The full OpenCode engine is used only to extract the req
 ```sh
 git clone https://github.com/PwnPeter/opencode-local-api.git
 cd opencode-local-api
+```
+
+### System
+
+**API + Harness**
+
+```sh
 ./setup
 ```
 
-## Docker
+### Docker/Podman
+
+**Docker · API only**
 
 ```sh
 docker compose build
 docker compose run --rm relay python3 scripts/install.py prepare
-docker compose up -d --wait
-```
-
-API only, with Node inside the container. Docker Compose is required; neither Node nor systemd is needed on the host. `./setup` also offers this mode. The native option installs both the API and Harness.
-
-```sh
+docker compose up -d --wait --wait-timeout 600
 docker compose exec relay cat /data/opencode-local-api/harness.env
 ```
 
-Use this local token as the client's API key, `http://127.0.0.1:4097/v1` as its base URL, and `deepseek-v4.1-flash-free` as its model. The upstream OpenCode key stays in the container volume. The host port is bound to localhost only.
+**Podman · API only**
 
 ```sh
-docker compose logs -f relay
-docker compose down
+podman compose build
+podman compose run --rm relay python3 scripts/install.py prepare
+podman compose up -d
+podman compose exec relay cat /data/opencode-local-api/harness.env
 ```
-
-`docker compose down` keeps credentials and the extracted protocol. Rerun the setup after an interruption. Use `RELAY_PORT=4098` with Compose to select another host port.
 
 ## Requirements
 
 - git; Python 3.10+ for the guided launcher
-- Docker Compose for the container option
+- Container option: Docker Compose v2, or Podman with a [Compose provider](https://docs.podman.io/en/latest/markdown/podman-compose.1.html) such as `podman-compose`; no host Node or systemd required
 - Native option: Linux with user systemd services, Node.js 24+ (or 22.19+ on 22.x), npm, curl, make; the guide installs missing packages with apt or dnf
 - [OpenCode API key](https://opencode.ai/console/): **Account → Personal API keys → Add API key → Create**; paste it at the hidden prompt. [Details](https://opencode.ai/v2/docs/console/api/#personal-api-keys).
 - x86_64 or ARM64 (tested on Fedora and Kali x86_64)
@@ -77,6 +81,8 @@ docker compose down
 | `make refresh` | Downloads OpenCode, extracts, tests, and cleans up |
 | `make verify` | Tests the installed protocol against the free model |
 | `make test` | Runs local tests without a key or provider requests |
+| `docker compose logs -f relay` / `podman compose logs -f relay` | Follows container logs |
+| `docker compose down` / `podman compose down` | Stops the container; keeps credentials and protocol |
 
 ## Layout
 
@@ -142,7 +148,15 @@ make refresh
 ```sh
 docker compose build --pull
 docker compose run --rm relay python3 scripts/install.py prepare --refresh
-docker compose up -d --wait --force-recreate
+docker compose up -d --wait --wait-timeout 600 --force-recreate
+```
+
+### Podman
+
+```sh
+podman compose build --pull
+podman compose run --rm relay python3 scripts/install.py prepare --refresh
+podman compose up -d --force-recreate
 ```
 
 The script downloads the latest official release, extracts only the required protocol, tests a response and a streaming tool round trip, then removes the binary and its temporary dependencies. There is no need to keep the OpenCode sources.
@@ -155,6 +169,16 @@ The script downloads the latest official release, extracts only the required pro
 
 The setup guide saves your credentials before extraction. Rerunning `./setup` reuses them, keeps the verified protocol, and skips the Harness download when it is already installed. An interrupted extraction restarts safely; completed steps are kept.
 
+Docker/Podman runs the API with Node inside the container. For a client installed separately:
+
+| Setting | Value |
+| --- | --- |
+| Base URL | `http://127.0.0.1:4097/v1` |
+| API key | `OPENCODE_LOCAL_API_KEY` printed by the container command in Startup |
+| Model | `deepseek-v4.1-flash-free` |
+
+The upstream OpenCode key stays in the container volume. Repeat the Docker or Podman startup commands after an interruption; saved credentials and protocol are reused. `compose down` keeps this data. Use `RELAY_PORT=4098` with each Compose command to select another host port. `./setup` also offers the Docker mode.
+
 <details>
 <summary>Automation</summary>
 
@@ -166,12 +190,12 @@ Set `OPENCODE_API_KEY` in the environment when running `make install`. The local
 - `~/.config/opencode-local-api/environment`: your upstream key and a separate local token; the directory follows `XDG_CONFIG_HOME` when set.
 - `harness.env`: only the local token to load into the Harness.
 - `envelope.json`: extracted protocol without an API key.
-- Docker: the same private files are stored in the `relay-data` volume, outside the repository.
+- Docker/Podman: the same private files are stored in the `relay-data` volume, outside the repository.
 - `~/.config/systemd/user/opencode-local-api.service`: runs only Node.
 
 The service starts at each user login. Run `make install` again after moving the project.
 
-Configuration is private (`0700` for the directory, `0600` for files). None of these local files are published. Each user supplies their own key. The native service listens only on `127.0.0.1`; Docker binds its published host port to `127.0.0.1`. Both require the local token; it does not log messages or keys. Requests pass through OpenCode and its model provider.
+Configuration is private (`0700` for the directory, `0600` for files). None of these local files are published. Each user supplies their own key. The native service and published container port listen only on `127.0.0.1`. Both require the local token; the relay does not log messages or keys. Requests pass through OpenCode and its model provider.
 
 ## Conversations
 
@@ -199,14 +223,6 @@ Remove the provider configuration from your Harness before deleting the project.
 </details>
 
 ---
-
-## Related projects
-
-- [zen-proxy](https://github.com/12errh/zen-proxy): Node relay with native identifiers, compatibility tools, and OpenAI and Anthropic routes.
-- [opencode-free-bridge](https://github.com/raksix/opencode-free-bridge): translates Chat Completions to a continuously running `opencode serve` server.
-- [dsh-opencode-bridge](https://github.com/XucroYuri/dsh-opencode-bridge): experimental integration as a DeepSeek Harness plugin.
-
-These projects share the local relay approach; they have not been installed or validated with this configuration.
 
 [MIT License](LICENSE) · [Official OpenCode](https://github.com/anomalyco/opencode) · [Reference version](https://github.com/anomalyco/opencode/tree/v1.19.3)
 
