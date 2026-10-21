@@ -2,7 +2,7 @@
   <img src="assets/logo.png" width="160" height="160" alt="Petit robot relais menthe et corail, avec deux prises et une antenne éclair">
 </p>
 
-<h1 align="center">OpenCode Local API</h1>
+<h1 align="center">OpenCode API</h1>
 
 <p align="center">
   Un petit pont entre DeepSeek Harness et OpenCode.<br>
@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <a href="#démarrer-en-trois-commandes">Installer</a> ·
-  <a href="#brancher-deepseek-harness">Brancher le Harness</a> ·
-  <a href="#modèles-gratuits-et-illimités">Modèles gratuits</a> ·
-  <a href="#mettre-à-jour-et-faire-le-ménage">Mettre à jour</a>
+  <a href="#démarrage">Démarrage</a> ·
+  <a href="#harness">Harness</a> ·
+  <a href="#modèles">Modèles</a> ·
+  <a href="#actualisation">Actualisation</a>
 </p>
 
 ---
@@ -24,9 +24,7 @@ Le relais tourne avec Node. Le moteur OpenCode complet sert uniquement à extrai
 
 > **Modèle activé dans ce relais :** `deepseek-v4.1-flash-free`. La liste ci-dessous décrit le catalogue OpenCode ; les autres modèles ne sont pas activés ici. Aucun repli payant.
 
-## Démarrer en trois commandes
-
-Il vous faut **Linux + systemd utilisateur**, **Node.js 22+**, **Python 3.10+**, `curl` et `make`. Installation prévue pour x86_64 et ARM64 ; testée sur Fedora x86_64.
+## Démarrage
 
 ```sh
 git clone https://github.com/PwnPeter/opencode-local-api.git
@@ -34,20 +32,14 @@ cd opencode-local-api
 make install
 ```
 
-Le dépôt est privé : demandez l'accès à son propriétaire avant de le cloner.
+## Prérequis
 
-L'installateur demande **votre propre clé API OpenCode**, sans l'afficher. Il vérifie le téléchargement officiel par SHA-256, extrait le protocole et teste le texte, les outils et le streaming avant de supprimer le moteur temporaire.
+- Linux avec systemd utilisateur
+- Node.js 22+, Python 3.10+, curl, make
+- Clé API OpenCode
+- x86_64 ou ARM64 (testé sur Fedora x86_64)
 
-Le service démarre aussitôt, puis automatiquement à chaque connexion utilisateur. Gardez le dossier du projet à son emplacement ; après un déplacement, relancez `make install`.
-
-<details>
-<summary>Installation sans saisie interactive</summary>
-
-Fournir `OPENCODE_API_KEY` dans l'environnement de `make install`. Le jeton local est généré séparément. Ne commitez jamais vos clés : elles sont enregistrées dans votre configuration privée, hors du projet.
-
-</details>
-
-## Les commandes du quotidien
+## Commandes
 
 | Commande | Ce qu'elle fait |
 | --- | --- |
@@ -59,11 +51,11 @@ Fournir `OPENCODE_API_KEY` dans l'environnement de `make install`. Le jeton loca
 | `make verify` | Teste le protocole installé auprès du modèle gratuit |
 | `make test` | Lance les tests locaux, sans clé ni appel au fournisseur |
 
-## Modèles gratuits et illimités
+## Modèles
 
 **Vérifié le 20 octobre 2026.** Les tarifs viennent de la [documentation officielle](https://opencode.ai/v2/docs/console/models/#pricing) ; la présence dans le catalogue vient de l'[API officielle des modèles](https://opencode.ai/inference/v1/models). « Présent » signifie listé par cette API, sans garantir l'accès avec chaque compte.
 
-### Gratuits et présents dans le catalogue API
+### Gratuits
 
 | Modèle | Identifiant |
 | --- | --- |
@@ -80,7 +72,7 @@ Fournir `OPENCODE_API_KEY` dans l'environnement de `make install`. Le jeton loca
 
 Jev utilise une API spécifique de décisions structurées ; ce n'est pas un modèle de chat interchangeable avec DeepSeek.
 
-### Encore documentés gratuits, mais absents du catalogue API actuel
+### Non listés
 
 | Modèle | Identifiant documenté |
 | --- | --- |
@@ -89,7 +81,7 @@ Jev utilise une API spécifique de décisions structurées ; ce n'est pas un mod
 | MiMo-V2.5 Free | `mimo-v2.5-free` |
 | Nemotron 3 Ultra Free | `nemotron-3-ultra-free` |
 
-### Lesquels sont annoncés illimités ?
+### Illimités
 
 La [documentation Go / Go Plus](https://opencode.ai/v2/docs/console/go/#usage-limits) affiche explicitement **Unlimited** pour **LongCat 2.5 Preview Free**, **Beam Free** et **MiniMax M3.1 Flash Free**, pendant leur période promotionnelle.
 
@@ -97,7 +89,7 @@ Cette mention concerne les offres Go / Go Plus, dont l'abonnement est payant ; e
 
 Les autres modèles gratuits ne sont pas présentés ici comme illimités : leur gratuité est temporaire et ne garantit ni débit ni disponibilité. DeepSeek Free fonctionne avec la clé utilisée pour les essais de ce relais ; aucune promesse d'illimité n'est établie pour ce compte.
 
-## Mettre à jour et faire le ménage
+## Actualisation
 
 ```sh
 make refresh
@@ -109,7 +101,7 @@ Le script récupère la dernière version officielle, extrait uniquement le prot
 
 `make install` réutilise un protocole existant ; une première installation utilise la version de référence **1.19.3**. L'extraction initiale, `make refresh` et `make verify` effectuent des requêtes au modèle gratuit.
 
-## Brancher DeepSeek Harness
+## Harness
 
 Importer les blocs de `dsh.patch.yml` dans votre profil Harness, ou les passer à une commande ponctuelle :
 
@@ -135,7 +127,14 @@ EnvironmentFile=%h/.config/opencode-local-api/harness.env
 
 Adapter le chemin si `XDG_CONFIG_HOME` est personnalisé, puis exécuter `systemctl --user daemon-reload` et `systemctl --user restart deepseek-harness.service`.
 
-## Vos clés restent chez vous
+## Configuration
+
+<details>
+<summary>Automatisation</summary>
+
+Fournir `OPENCODE_API_KEY` dans l'environnement de `make install`. Le jeton local est généré séparément.
+
+</details>
 
 - Le code de ce dépôt et les tests, sans dépendance externe à installer.
 - `~/.config/opencode-local-api/environment` : votre clé amont et un jeton local distinct ; le dossier suit `XDG_CONFIG_HOME` si défini.
@@ -143,9 +142,11 @@ Adapter le chemin si `XDG_CONFIG_HOME` est personnalisé, puis exécuter `system
 - `envelope.json` : protocole extrait sans clé API.
 - L'unité `systemd/user/opencode-local-api.service` : lance seulement Node.
 
+Le service démarre à chaque connexion utilisateur. Après un déplacement du projet, relancer `make install`.
+
 La configuration est privée (`0700` pour le dossier, `0600` pour les fichiers). Aucun de ces fichiers locaux n'est publié. Chaque utilisateur du dépôt fournit sa propre clé. Le service écoute seulement sur `127.0.0.1` et exige le jeton local ; il ne journalise pas les messages ni les clés. Les requêtes transitent chez OpenCode et son fournisseur de modèle.
 
-## Conversations et requêtes
+## Conversations
 
 Le relais conserve les messages et les outils de votre agent. Il n'ajoute plus le prompt système OpenCode complet et ne garde que deux définitions d'outils natifs de compatibilité (`bash` et `read`). Sur une petite requête de contrôle, la surcharge passe d'environ 7 800 à 2 000 tokens, soit environ 75 % de moins ; le gain dépend des outils déjà fournis par le client.
 
@@ -153,14 +154,14 @@ Les en-têtes `x-opencode-session`, `x-opencode-session-id` et `x-dsh-session-id
 
 Le cache conserve uniquement des empreintes et des identifiants, avec un maximum de 512 entrées, sans enregistrer les textes ni les clés. Les types invalides pour les messages, les outils ou le paramètre `stream` sont rejetés avec une erreur `400` avant tout appel au fournisseur.
 
-## À savoir
+## Limites
 
 Le profil Harness réserve une marge de contexte. Le relais n'exécute aucun outil : le Harness exécute les siens ; il peut refuser un outil natif qu'il ne connaît pas. L'extraction et les sondes réelles de `make refresh` vérifient que le protocole réduit reste accepté avant de l'installer.
 
 Le relais reproduit le format de requête extrait et les identifiants natifs ; il ne fabrique aucune signature cryptographique. Le modèle gratuit et la compatibilité peuvent changer côté OpenCode. L'extraction initiale nécessite temporairement plusieurs centaines de Mo de disque et le moteur natif consomme de la mémoire pendant cette étape.
 
 <details>
-<summary>Désinstaller le service</summary>
+<summary>Désinstallation</summary>
 
 ```sh
 systemctl --user disable --now opencode-local-api.service
