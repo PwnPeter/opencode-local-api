@@ -34,7 +34,7 @@ cd opencode-local-api
 
 ### System
 
-**API + Harness**
+**Installs: local API + DeepSeek Harness**
 
 ```sh
 ./setup
