@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -22,6 +23,36 @@ if spec and spec.origin and Path(spec.origin).exists():
 class InstallTests(unittest.TestCase):
     def setUp(self):
         self.assertIsNotNone(installer, 'portable installer must exist')
+
+    def test_first_install_keeps_private_credentials_after_interruption(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / 'opencode-local-api'
+            with patch.dict(os.environ, {'XDG_CONFIG_HOME': tmp, 'OPENCODE_API_KEY': 'resume-key-fixture'}), \
+                    patch.object(sys, 'argv', ['install.py']), \
+                    patch.object(installer, 'regenerate', side_effect=KeyboardInterrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    installer.main()
+            saved = installer.read_environment(config / 'environment')
+            self.assertEqual(saved.get('OPENCODE_API_KEY'), 'resume-key-fixture')
+            self.assertEqual(stat.S_IMODE((config / 'environment').stat().st_mode), 0o600)
+            with patch.dict(os.environ, {}, clear=True), patch.object(installer.getpass, 'getpass', side_effect=AssertionError('key requested again')):
+                resumed = installer.credentials(config)
+            self.assertEqual(resumed, saved)
+
+    def test_setup_reuses_an_installed_harness_without_npm(self):
+        setup_path = ROOT / 'setup.py'
+        self.assertTrue(setup_path.is_file(), 'guided setup is missing')
+        setup_spec = importlib.util.spec_from_file_location('guided_setup', setup_path)
+        setup = importlib.util.module_from_spec(setup_spec)
+        setup_spec.loader.exec_module(setup)
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = Path(tmp)
+            binary = prefix / 'bin/dsh'
+            binary.parent.mkdir()
+            binary.write_text('#!/bin/sh\nprintf "0.2.1-rc.2\\n"\n')
+            binary.chmod(0o755)
+            with patch.dict(os.environ, {'PATH': ''}):
+                self.assertEqual(setup.ensure_harness(prefix), binary)
 
     def test_configuration_is_portable_private_and_preserves_credentials(self):
         with tempfile.TemporaryDirectory() as tmp:

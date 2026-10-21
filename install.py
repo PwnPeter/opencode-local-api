@@ -204,6 +204,9 @@ def main():
     if action not in ['install', 'refresh', 'verify']:
         raise ValueError('Usage: install.py [install|refresh|verify]')
     values = credentials(config)
+    if action == 'install' and not (config / 'environment').exists():
+        # Keep first-install credentials if extraction is interrupted; preserve existing setups.
+        private_write(config / 'environment', ''.join(f"{key}='{value}'\n" for key, value in values.items()))
     if action == 'verify':
         verify(config / 'envelope.json', values, node)
         print('Verified: text, tool call, tool result and complete streaming response')

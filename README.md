@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" width="160" height="160" alt="Small mint and coral relay robot with two plugs and a lightning bolt antenna">
+  <img src="assets/logo.png" width="160" height="160" alt="OpenCode gateway mark crossed by a mint proxy arrow">
 </p>
 
 <h1 align="center">OpenCode API</h1>
@@ -29,22 +29,22 @@ The relay runs on Node. The full OpenCode engine is used only to extract the req
 ```sh
 git clone https://github.com/PwnPeter/opencode-local-api.git
 cd opencode-local-api
-make install
-npm install --global --prefix "$HOME/.local" @deepseek-ai/dsh@0.2.1-rc.2
-make harness
+./setup.py
 ```
 
 ## Requirements
 
 - Linux with user systemd services
-- Node.js 24+, npm, Python 3.10+, curl, make, git
-- [OpenCode API key](https://opencode.ai/console/): **Account → Personal API keys → Add API key → Create**; paste it into the terminal when `make install` prompts you. [Details](https://opencode.ai/v2/docs/console/api/#personal-api-keys).
-- x86_64 or ARM64 (tested on Fedora x86_64)
+- Python 3.10+ and git
+- Node.js 24+ (or 22.19+ on 22.x), npm, curl, make; missing packages can be installed by the guide with apt or dnf
+- [OpenCode API key](https://opencode.ai/console/): **Account → Personal API keys → Add API key → Create**; paste it into the terminal when the setup guide prompts you. [Details](https://opencode.ai/v2/docs/console/api/#personal-api-keys).
+- x86_64 or ARM64 (tested on Fedora and Kali x86_64)
 
 ## Commands
 
 | Command | Action |
 | --- | --- |
+| `./setup.py` | Guides installation; rerun after an interruption to resume |
 | `make harness` | Opens the Harness with the local API and `deepseek-v4.1-flash-free` configured |
 | `make status` | Shows service status |
 | `make logs` | Follows service logs |
@@ -106,6 +106,8 @@ The script downloads the latest official release, extracts only the required pro
 
 ## Configuration
 
+The setup guide saves your credentials before extraction. Rerunning `./setup.py` reuses them, keeps the verified protocol, and skips the Harness download when it is already installed. An interrupted extraction restarts safely; completed steps are kept.
+
 <details>
 <summary>Automation</summary>
 
@@ -160,4 +162,4 @@ These projects share the local relay approach; they have not been installed or v
 
 [MIT License](LICENSE) · [Official OpenCode](https://github.com/anomalyco/opencode) · [Reference version](https://github.com/anomalyco/opencode/tree/v1.19.3)
 
-The identifier codec comes from `packages/schema/src/identifier.ts`, under the MIT license. The logo was created with `imagegen`: a small mint and coral relay robot, two plugs, a lightning bolt antenna, and a transparent background.
+The identifier codec comes from `packages/schema/src/identifier.ts`, under the MIT license. The logo was created with `imagegen`, based on the [OpenCode mark](https://opencode.ai/brand): a mint proxy arrow crossing the gateway, on a transparent background.
