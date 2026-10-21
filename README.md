@@ -99,9 +99,9 @@ Sorted by published [Artificial Analysis Intelligence Index](https://artificiala
 
 | Model | ID | AA index |
 | --- | --- | ---: |
+| **DeepSeek V4.1 Flash 1017 (reference)** | **`deepseek-v4.1-flash-free`** | **45†** |
 | MiniMax M3.1 Flash Free | `minimax-m3.1-flash-free` | 43 |
 | GLM-5.3-Flash Free | `glm-5.3-flash-free` | 42 |
-| **DeepSeek V4.1 Flash Free** | **`deepseek-v4.1-flash-free`** | **39†** |
 | MiMo-V2.6-Flash Free | `mimo-v2.6-flash-free` | 38 |
 | Beam Free | `beam-free` | 30 |
 | Nemotron 3.5 Super VL Free | `nemotron-3.5-super-vl-free` | 26 |
@@ -110,7 +110,7 @@ Sorted by published [Artificial Analysis Intelligence Index](https://artificiala
 | LongCat 2.5 Preview Free | `longcat-2.5-preview-free` | Not rated |
 | Jev 1.13 Free | `jev-1.13-free` | Not comparable |
 
-† [DeepSeek V4.1 Flash (Max), September release](https://artificialanalysis.ai/models/releases/deepseek-v4-1-flash). AA scores the later [1017 release](https://artificialanalysis.ai/models/comparisons/deepseek-v4-1-flash-1017-vs-deepseek-v4-1-flash) at 45; OpenCode's undated free ID does not confirm that revision. Beam's reference is Beam 1.0. Unrated models are not ranked below the others on capability. Jev uses a structured decision API rather than interchangeable chat.
+† [DeepSeek V4.1 Flash 1017 (Max)](https://artificialanalysis.ai/models/comparisons/deepseek-v4-1-flash-1017-vs-deepseek-v4-1-flash) is the benchmark reference at 45. OpenCode's undated `deepseek-v4.1-flash-free` alias does not expose its exact revision; this is not a verified 1017 API endpoint. Beam's reference is Beam 1.0. Unrated models are not ranked below the others on capability. Jev uses a structured decision API rather than interchangeable chat.
 
 ### Unlisted
 
