@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { createTransport, readChunks } from './transport.mjs'
+import { createTransport, readChunks } from '../src/transport.mjs'
 
 const envelope = JSON.parse(readFileSync(process.argv[2], 'utf8'))
 const complete = createTransport(envelope, process.env.OPENCODE_API_KEY)

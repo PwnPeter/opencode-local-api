@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { assemble, identifier, prepareRequest } from './protocol.mjs'
+import { assemble, identifier, prepareRequest } from '../src/protocol.mjs'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import Extract from './extract.mjs'
+import Extract from '../scripts/extract.mjs'
 
 test('identifiers retain native time encoding and format', () => {
   const msg = identifier('msg', false, 1_700_000_000_000)

@@ -15,7 +15,7 @@ import sys
 import tarfile
 import tempfile
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 VERSION = '1.19.3'
 CHECKSUMS = {
     'x64': '13a8fb2978302071b86f9d7e00da9c8895f9cd846978379c3bdc6a5333536c9b',
@@ -64,7 +64,7 @@ def credentials(config):
     key = os.environ.get('OPENCODE_API_KEY') or existing.get('OPENCODE_API_KEY')
     if not key:
         if not sys.stdin.isatty():
-            raise ValueError('Run make install in a terminal to enter your OpenCode API key, or set OPENCODE_API_KEY')
+            raise ValueError('Run the setup guide in a terminal to enter your OpenCode API key, or set OPENCODE_API_KEY')
         key = getpass.getpass('OpenCode API key (hidden): ').strip()
     values = {
         'OPENCODE_API_KEY': key,
@@ -75,18 +75,23 @@ def credentials(config):
     return values
 
 
-def configure(project, config, units, node, values):
+def save_credentials(config, values):
     config.mkdir(mode=0o700, parents=True, exist_ok=True)
     config.chmod(0o700)
     changed = private_write(config / 'environment', ''.join(f"{key}='{value}'\n" for key, value in values.items()))
     changed |= private_write(config / 'harness.env', f"OPENCODE_LOCAL_API_KEY='{values['OPENCODE_LOCAL_API_KEY']}'\n")
+    return changed
+
+
+def configure(project, config, units, node, values):
+    changed = save_credentials(config, values)
     replacements = {
         '@ENVIRONMENT@': unit_quote(config / 'environment')[1:-1],
         '@ENVELOPE@': unit_quote(f'RELAY_ENVELOPE_FILE={config / "envelope.json"}'),
         '@NODE@': unit_quote(node, executable=True),
-        '@SERVER@': unit_quote(project / 'server.mjs', executable=True),
+        '@SERVER@': unit_quote(project / 'src/server.mjs', executable=True),
     }
-    unit = (project / SERVICE).read_text()
+    unit = (project / 'config' / SERVICE).read_text()
     for name, value in replacements.items():
         unit = unit.replace(name, value)
     changed |= private_write(units / SERVICE, unit)
@@ -140,7 +145,7 @@ def checked_run(command, env, label, timeout):
 
 
 def verify(envelope, values, node):
-    checked_run([str(node), str(ROOT / 'verify.mjs'), str(envelope)],
+    checked_run([str(node), str(ROOT / 'scripts/verify.mjs'), str(envelope)],
                 {**os.environ, **values}, 'Text/tool/stream verification', 300)
 
 
@@ -156,7 +161,7 @@ def regenerate(config, values, node, refresh):
         unpack_binary(archive, binary, digest)
         model = 'opencode/deepseek-v4.1-flash-free'
         settings = {
-            'plugin': [(ROOT / 'extract.mjs').as_uri()], 'enabled_providers': ['opencode'],
+            'plugin': [(ROOT / 'scripts/extract.mjs').as_uri()], 'enabled_providers': ['opencode'],
             'model': model, 'small_model': model,
             'provider': {'opencode': {'whitelist': ['deepseek-v4.1-flash-free']}},
             'permission': {'*': 'allow'}, 'share': 'disabled', 'autoupdate': False,
@@ -188,8 +193,12 @@ def regenerate(config, values, node, refresh):
 
 def main():
     if platform.system() != 'Linux':
-        raise ValueError('Automatic installation currently requires Linux with a systemd user session')
-    for command in ['node', 'curl', 'systemctl']:
+        raise ValueError('Automatic installation requires Linux')
+    action = sys.argv[1] if len(sys.argv) > 1 else 'install'
+    if action not in ['install', 'refresh', 'verify', 'prepare'] or (sys.argv[2:] and (action != 'prepare' or sys.argv[2:] != ['--refresh'])):
+        raise ValueError('Usage: install.py [install|refresh|verify|prepare [--refresh]]')
+    commands = ['node', 'curl'] + ([] if action in ['prepare', 'verify'] else ['systemctl'])
+    for command in commands:
         if not shutil.which(command):
             raise ValueError(f'Missing prerequisite: {command}')
     node = Path(shutil.which('node')).resolve()
@@ -200,26 +209,28 @@ def main():
     config = base / 'opencode-local-api'
     config.mkdir(mode=0o700, parents=True, exist_ok=True)
     config.chmod(0o700)
-    action = sys.argv[1] if len(sys.argv) > 1 else 'install'
-    if action not in ['install', 'refresh', 'verify']:
-        raise ValueError('Usage: install.py [install|refresh|verify]')
     values = credentials(config)
-    if action == 'install' and not (config / 'environment').exists():
+    if action in ['install', 'prepare'] and not (config / 'environment').exists():
         # Keep first-install credentials if extraction is interrupted; preserve existing setups.
-        private_write(config / 'environment', ''.join(f"{key}='{value}'\n" for key, value in values.items()))
+        save_credentials(config, values)
     if action == 'verify':
         verify(config / 'envelope.json', values, node)
         print('Verified: text, tool call, tool result and complete streaming response')
         return
-    if action == 'refresh' or not (config / 'envelope.json').exists():
-        regenerate(config, values, node, action == 'refresh')
+    refresh = action == 'refresh' or '--refresh' in sys.argv[2:]
+    if refresh or not (config / 'envelope.json').exists():
+        regenerate(config, values, node, refresh)
+    if action == 'prepare':
+        save_credentials(config, values)
+        print(f'Container configuration ready: {config}', flush=True)
+        return
     was_active = subprocess.run(['systemctl', '--user', 'is-active', '--quiet', SERVICE]).returncode == 0
     configure(ROOT, config, base / 'systemd/user', node, values)
     subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
     subprocess.run(['systemctl', '--user', 'enable', '--now', SERVICE], check=True)
     if was_active:
         subprocess.run(['systemctl', '--user', 'restart', SERVICE], check=True)
-    checked_run([str(node), str(ROOT / 'server.mjs'), '--check'], {**os.environ, **values}, 'Local HTTP readiness', 20)
+    checked_run([str(node), str(ROOT / 'src/server.mjs'), '--check'], {**os.environ, **values}, 'Local HTTP readiness', 20)
     # Remove only the former relay runtime; credentials and private backups stay.
     shutil.rmtree(ROOT / 'runtime', ignore_errors=True)
     shutil.rmtree(config / 'opencode', ignore_errors=True)

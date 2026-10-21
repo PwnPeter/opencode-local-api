@@ -4,20 +4,20 @@ PYTHON ?= python3
 .PHONY: install refresh verify start stop restart status logs test harness
 
 install:
-	$(PYTHON) install.py
+	$(PYTHON) scripts/install.py
 
 harness:
 	@set -eu; \
 	export PATH="$$HOME/.local/bin:$$PATH"; \
 	set -a; \
 	. "$${XDG_CONFIG_HOME:-$$HOME/.config}/opencode-local-api/harness.env"; \
-	exec dsh web --patch "$(CURDIR)/dsh.patch.yml" --host 127.0.0.1 --port 0
+	exec dsh web --patch "$(CURDIR)/config/dsh.patch.yml" --host 127.0.0.1 --port 0
 
 refresh:
-	$(PYTHON) install.py refresh
+	$(PYTHON) scripts/install.py refresh
 
 verify:
-	$(PYTHON) install.py verify
+	$(PYTHON) scripts/install.py verify
 
 start stop restart status:
 	systemctl --user $@ opencode-local-api.service
@@ -27,4 +27,4 @@ logs:
 
 test:
 	node --test
-	$(PYTHON) -m unittest -v test_install.py
+	$(PYTHON) -B -m unittest discover -s tests -p 'test_*.py' -v

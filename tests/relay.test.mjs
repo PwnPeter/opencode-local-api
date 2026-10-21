@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { after, test } from 'node:test'
-import { createHandler } from './relay.mjs'
+import { createHandler } from '../src/relay.mjs'
 
 const requests = []
 const upstream = createServer(async (request, response) => {

@@ -39,5 +39,6 @@ if (process.argv.includes('--check')) {
       outgoing.end()
     }
   })
-  server.listen(4097, '127.0.0.1', () => console.log(`Local relay ready on 127.0.0.1:4097 (protocol ${envelope.version})`))
+  const host = process.env.RELAY_HOST || '127.0.0.1'
+  server.listen(4097, host, () => console.log(`Local relay ready on ${host}:4097 (protocol ${envelope.version})`))
 }

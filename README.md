@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="#startup">Startup</a> ·
+  <a href="#docker">Docker</a> ·
   <a href="#commands">Commands</a> ·
   <a href="#models">Models</a> ·
   <a href="#updates">Updates</a>
@@ -29,22 +30,45 @@ The relay runs on Node. The full OpenCode engine is used only to extract the req
 ```sh
 git clone https://github.com/PwnPeter/opencode-local-api.git
 cd opencode-local-api
-./setup.py
+./setup
 ```
+
+## Docker
+
+```sh
+docker compose build
+docker compose run --rm relay python3 scripts/install.py prepare
+docker compose up -d --wait
+```
+
+API only, with Node inside the container. Docker Compose is required; neither Node nor systemd is needed on the host. `./setup` also offers this mode. The native option installs both the API and Harness.
+
+```sh
+docker compose exec relay cat /data/opencode-local-api/harness.env
+```
+
+Use this local token as the client's API key, `http://127.0.0.1:4097/v1` as its base URL, and `deepseek-v4.1-flash-free` as its model. The upstream OpenCode key stays in the container volume. The host port is bound to localhost only.
+
+```sh
+docker compose logs -f relay
+docker compose down
+```
+
+`docker compose down` keeps credentials and the extracted protocol. Rerun the setup after an interruption. Use `RELAY_PORT=4098` with Compose to select another host port.
 
 ## Requirements
 
-- Linux with user systemd services
-- Python 3.10+ and git
-- Node.js 24+ (or 22.19+ on 22.x), npm, curl, make; missing packages can be installed by the guide with apt or dnf
-- [OpenCode API key](https://opencode.ai/console/): **Account → Personal API keys → Add API key → Create**; paste it into the terminal when the setup guide prompts you. [Details](https://opencode.ai/v2/docs/console/api/#personal-api-keys).
+- git; Python 3.10+ for the guided launcher
+- Docker Compose for the container option
+- Native option: Linux with user systemd services, Node.js 24+ (or 22.19+ on 22.x), npm, curl, make; the guide installs missing packages with apt or dnf
+- [OpenCode API key](https://opencode.ai/console/): **Account → Personal API keys → Add API key → Create**; paste it at the hidden prompt. [Details](https://opencode.ai/v2/docs/console/api/#personal-api-keys).
 - x86_64 or ARM64 (tested on Fedora and Kali x86_64)
 
 ## Commands
 
 | Command | Action |
 | --- | --- |
-| `./setup.py` | Guides installation; rerun after an interruption to resume |
+| `./setup` | Guides installation; rerun after an interruption to resume |
 | `make harness` | Opens the Harness with the local API and `deepseek-v4.1-flash-free` configured |
 | `make status` | Shows service status |
 | `make logs` | Follows service logs |
@@ -53,6 +77,17 @@ cd opencode-local-api
 | `make refresh` | Downloads OpenCode, extracts, tests, and cleans up |
 | `make verify` | Tests the installed protocol against the free model |
 | `make test` | Runs local tests without a key or provider requests |
+
+## Layout
+
+```text
+src/       Relay runtime
+scripts/   Setup, extraction, verification
+config/    Harness profile and service template
+tests/     Node and Python tests
+assets/    Logo
+setup      Guided launcher
+```
 
 ## Models
 
@@ -94,8 +129,18 @@ Other free models are not described here as unlimited: free access is temporary 
 
 ## Updates
 
+### Native
+
 ```sh
 make refresh
+```
+
+### Docker
+
+```sh
+docker compose build --pull
+docker compose run --rm relay python3 scripts/install.py prepare --refresh
+docker compose up -d --wait --force-recreate
 ```
 
 The script downloads the latest official release, extracts only the required protocol, tests a response and a streaming tool round trip, then removes the binary and its temporary dependencies. There is no need to keep the OpenCode sources.
@@ -106,7 +151,7 @@ The script downloads the latest official release, extracts only the required pro
 
 ## Configuration
 
-The setup guide saves your credentials before extraction. Rerunning `./setup.py` reuses them, keeps the verified protocol, and skips the Harness download when it is already installed. An interrupted extraction restarts safely; completed steps are kept.
+The setup guide saves your credentials before extraction. Rerunning `./setup` reuses them, keeps the verified protocol, and skips the Harness download when it is already installed. An interrupted extraction restarts safely; completed steps are kept.
 
 <details>
 <summary>Automation</summary>
@@ -119,11 +164,12 @@ Set `OPENCODE_API_KEY` in the environment when running `make install`. The local
 - `~/.config/opencode-local-api/environment`: your upstream key and a separate local token; the directory follows `XDG_CONFIG_HOME` when set.
 - `harness.env`: only the local token to load into the Harness.
 - `envelope.json`: extracted protocol without an API key.
-- `systemd/user/opencode-local-api.service`: runs only Node.
+- Docker: the same private files are stored in the `relay-data` volume, outside the repository.
+- `~/.config/systemd/user/opencode-local-api.service`: runs only Node.
 
 The service starts at each user login. Run `make install` again after moving the project.
 
-Configuration is private (`0700` for the directory, `0600` for files). None of these local files are published. Each user supplies their own key. The service listens only on `127.0.0.1` and requires the local token; it does not log messages or keys. Requests pass through OpenCode and its model provider.
+Configuration is private (`0700` for the directory, `0600` for files). None of these local files are published. Each user supplies their own key. The native service listens only on `127.0.0.1`; Docker binds its published host port to `127.0.0.1`. Both require the local token; it does not log messages or keys. Requests pass through OpenCode and its model provider.
 
 ## Conversations
 

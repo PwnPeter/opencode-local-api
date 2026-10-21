@@ -1,7 +1,7 @@
 import importlib.util
 import io
-import json
 import os
+import shutil
 from pathlib import Path
 import stat
 import subprocess
@@ -12,8 +12,8 @@ import unittest
 from unittest.mock import patch
 
 
-ROOT = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location('installer', ROOT / 'install.py')
+ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location('installer', ROOT / 'scripts/install.py')
 installer = None
 if spec and spec.origin and Path(spec.origin).exists():
     installer = importlib.util.module_from_spec(spec)
@@ -40,11 +40,12 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(resumed, saved)
 
     def test_setup_reuses_an_installed_harness_without_npm(self):
-        setup_path = ROOT / 'setup.py'
+        setup_path = ROOT / 'scripts/setup.py'
         self.assertTrue(setup_path.is_file(), 'guided setup is missing')
         setup_spec = importlib.util.spec_from_file_location('guided_setup', setup_path)
         setup = importlib.util.module_from_spec(setup_spec)
-        setup_spec.loader.exec_module(setup)
+        with patch.dict(sys.modules, {'install': installer}):
+            setup_spec.loader.exec_module(setup)
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)
             binary = prefix / 'bin/dsh'
@@ -54,12 +55,33 @@ class InstallTests(unittest.TestCase):
             with patch.dict(os.environ, {'PATH': ''}):
                 self.assertEqual(setup.ensure_harness(prefix), binary)
 
+    def test_container_prepare_reuses_protocol_without_systemd_and_keeps_local_token(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / 'opencode-local-api'
+            config.mkdir()
+            (config / 'envelope.json').write_text('verified protocol fixture')
+            node = shutil.which('node')
+            curl = shutil.which('curl')
+            with patch.dict(os.environ, {'XDG_CONFIG_HOME': tmp, 'OPENCODE_API_KEY': 'container-key-fixture'}), \
+                    patch.object(sys, 'argv', ['install.py', 'prepare']), \
+                    patch.object(installer.shutil, 'which', side_effect=lambda name: {'node': node, 'curl': curl}.get(name)):
+                installer.main()
+                saved = installer.read_environment(config / 'environment')
+                installer.main()
+            self.assertEqual(installer.read_environment(config / 'environment'), saved)
+            self.assertEqual(saved['OPENCODE_API_KEY'], 'container-key-fixture')
+            self.assertNotEqual(saved['OPENCODE_LOCAL_API_KEY'], saved['OPENCODE_API_KEY'])
+            self.assertEqual((config / 'envelope.json').read_text(), 'verified protocol fixture')
+            self.assertEqual(stat.S_IMODE((config / 'harness.env').stat().st_mode), 0o600)
+            self.assertFalse((Path(tmp) / 'systemd').exists())
+
     def test_configuration_is_portable_private_and_preserves_credentials(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp) / 'another user %n $project'
             project.mkdir()
-            for name in ['opencode-local-api.service']:
-                (project / name).write_text((ROOT / name).read_text())
+            (project / 'config').mkdir()
+            name = 'config/opencode-local-api.service'
+            (project / name).write_text((ROOT / name).read_text())
             config = Path(tmp) / 'config'
             units = Path(tmp) / 'units'
             with patch.dict(os.environ, {'OPENCODE_API_KEY': 'test-upstream-key'}):

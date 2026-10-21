@@ -1,0 +1,9 @@
+**
+!Dockerfile
+!src/
+!src/*.mjs
+!scripts/
+!scripts/install.py
+!scripts/extract.mjs
+!scripts/verify.mjs
+!scripts/container.sh
