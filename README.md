@@ -19,32 +19,30 @@
 
 ---
 
-Use OpenCode's API without keeping OpenCode running. The relay exposes an **OpenAI Chat Completions** compatible API at `http://127.0.0.1:4097/v1`, with text, reasoning, tool calls, and streaming.
-
-The relay runs on Node. The full OpenCode engine is used only to extract the required protocol, then removed along with its temporary dependencies. The Harness executes the tools.
-
-> **Model enabled in this relay:** `deepseek-v4.1-flash-free`. The list below describes the OpenCode catalog; other models are not enabled here. No paid fallback.
-
 ## Startup
 
-```sh
-git clone https://github.com/PwnPeter/opencode-local-api.git
-cd opencode-local-api
-```
+1. Create an account at [OpenCode Console](https://opencode.ai/console/).
+2. **Account → Personal API keys → Add API key → Create**. Copy the key.
 
 ### System
 
 **Installs: local API + DeepSeek Harness**
 
 ```sh
+git clone https://github.com/PwnPeter/opencode-local-api.git
+cd opencode-local-api
 ./setup
 ```
+
+Choose **1 (Native)**, paste your OpenCode key at the hidden prompt, then accept the DeepSeek Harness installation and launch. The model and local API key are configured automatically.
 
 ### Docker/Podman
 
 **Docker · API only**
 
 ```sh
+git clone https://github.com/PwnPeter/opencode-local-api.git
+cd opencode-local-api
 docker compose build
 docker compose run --rm relay python3 scripts/install.py prepare
 docker compose up -d --wait --wait-timeout 600
@@ -54,11 +52,21 @@ docker compose exec relay cat /data/opencode-local-api/harness.env
 **Podman · API only**
 
 ```sh
+git clone https://github.com/PwnPeter/opencode-local-api.git
+cd opencode-local-api
 podman compose build
 podman compose run --rm relay python3 scripts/install.py prepare
 podman compose up -d
 podman compose exec relay cat /data/opencode-local-api/harness.env
 ```
+
+## Overview
+
+Use OpenCode's API without keeping OpenCode running. The relay exposes an **OpenAI Chat Completions** compatible API at `http://127.0.0.1:4097/v1`, with text, reasoning, tool calls, and streaming.
+
+The relay runs on Node. The full OpenCode engine is used only to extract the required protocol, then removed along with its temporary dependencies. The Harness executes the tools.
+
+> **Model enabled in this relay:** `deepseek-v4.1-flash-free`. The list below describes the OpenCode catalog; other models are not enabled here. No paid fallback.
 
 ## Requirements
 
