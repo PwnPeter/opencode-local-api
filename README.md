@@ -1,30 +1,30 @@
 <p align="center">
-  <img src="assets/logo.png" width="160" height="160" alt="Petit robot relais menthe et corail, avec deux prises et une antenne éclair">
+  <img src="assets/logo.png" width="160" height="160" alt="Small mint and coral relay robot with two plugs and a lightning bolt antenna">
 </p>
 
 <h1 align="center">OpenCode API</h1>
 
 <p align="center">
-  Un petit pont entre DeepSeek Harness et OpenCode.<br>
-  <strong>Local · Léger · Sans dépendance npm</strong>
+  A small bridge between DeepSeek Harness and OpenCode.<br>
+  <strong>Local · Lightweight · No npm dependencies</strong>
 </p>
 
 <p align="center">
-  <a href="#démarrage">Démarrage</a> ·
-  <a href="#commandes">Commandes</a> ·
-  <a href="#modèles">Modèles</a> ·
-  <a href="#actualisation">Actualisation</a>
+  <a href="#startup">Startup</a> ·
+  <a href="#commands">Commands</a> ·
+  <a href="#models">Models</a> ·
+  <a href="#updates">Updates</a>
 </p>
 
 ---
 
-Expose une API compatible **OpenAI Chat Completions** sur `http://127.0.0.1:4097/v1`, avec le texte, le raisonnement, les appels d'outils et le streaming.
+Exposes an **OpenAI Chat Completions** compatible API at `http://127.0.0.1:4097/v1`, with text, reasoning, tool calls, and streaming.
 
-Le relais tourne avec Node. Le moteur OpenCode complet sert uniquement à extraire le protocole nécessaire, puis il est supprimé avec ses dépendances temporaires. Les outils restent exécutés par le Harness.
+The relay runs on Node. The full OpenCode engine is used only to extract the required protocol, then removed along with its temporary dependencies. The Harness executes the tools.
 
-> **Modèle activé dans ce relais :** `deepseek-v4.1-flash-free`. La liste ci-dessous décrit le catalogue OpenCode ; les autres modèles ne sont pas activés ici. Aucun repli payant.
+> **Model enabled in this relay:** `deepseek-v4.1-flash-free`. The list below describes the OpenCode catalog; other models are not enabled here. No paid fallback.
 
-## Démarrage
+## Startup
 
 ```sh
 git clone https://github.com/PwnPeter/opencode-local-api.git
@@ -34,33 +34,33 @@ npm install --global --prefix "$HOME/.local" @deepseek-ai/dsh@0.2.1-rc.2
 make harness
 ```
 
-## Prérequis
+## Requirements
 
-- Linux avec systemd utilisateur
+- Linux with user systemd services
 - Node.js 24+, npm, Python 3.10+, curl, make, git
-- [Clé API OpenCode](https://opencode.ai/console/) : **Account → Personal API keys → Add API key → Create** ; à coller dans le terminal à la demande de `make install`. [Détails](https://opencode.ai/v2/docs/console/api/#personal-api-keys).
-- x86_64 ou ARM64 (testé sur Fedora x86_64)
+- [OpenCode API key](https://opencode.ai/console/): **Account → Personal API keys → Add API key → Create**; paste it into the terminal when `make install` prompts you. [Details](https://opencode.ai/v2/docs/console/api/#personal-api-keys).
+- x86_64 or ARM64 (tested on Fedora x86_64)
 
-## Commandes
+## Commands
 
-| Commande | Ce qu'elle fait |
+| Command | Action |
 | --- | --- |
-| `make harness` | Ouvre le Harness avec l'API locale et `deepseek-v4.1-flash-free` configurés |
-| `make status` | Affiche l'état du service |
-| `make logs` | Suit les journaux |
-| `make start` / `make stop` | Démarre ou arrête le relais |
-| `make restart` | Redémarre le relais |
-| `make refresh` | Récupère OpenCode, extrait, teste et nettoie |
-| `make verify` | Teste le protocole installé auprès du modèle gratuit |
-| `make test` | Lance les tests locaux, sans clé ni appel au fournisseur |
+| `make harness` | Opens the Harness with the local API and `deepseek-v4.1-flash-free` configured |
+| `make status` | Shows service status |
+| `make logs` | Follows service logs |
+| `make start` / `make stop` | Starts or stops the relay |
+| `make restart` | Restarts the relay |
+| `make refresh` | Downloads OpenCode, extracts, tests, and cleans up |
+| `make verify` | Tests the installed protocol against the free model |
+| `make test` | Runs local tests without a key or provider requests |
 
-## Modèles
+## Models
 
-**Vérifié le 20 octobre 2026.** Les tarifs viennent de la [documentation officielle](https://opencode.ai/v2/docs/console/models/#pricing) ; la présence dans le catalogue vient de l'[API officielle des modèles](https://opencode.ai/inference/v1/models). « Présent » signifie listé par cette API, sans garantir l'accès avec chaque compte.
+**Checked on October 20, 2026.** Pricing comes from the [official documentation](https://opencode.ai/v2/docs/console/models/#pricing); catalog entries come from the [official models API](https://opencode.ai/inference/v1/models). Being listed by this API does not guarantee access for every account.
 
-### Gratuits
+### Free
 
-| Modèle | Identifiant |
+| Model | ID |
 | --- | --- |
 | Big Pickle | `big-pickle` |
 | GLM-5.3-Flash Free | `glm-5.3-flash-free` |
@@ -73,91 +73,91 @@ make harness
 | Nemotron 3.5 Super VL Free | `nemotron-3.5-super-vl-free` |
 | Jev 1.13 Free | `jev-1.13-free` |
 
-Jev utilise une API spécifique de décisions structurées ; ce n'est pas un modèle de chat interchangeable avec DeepSeek.
+Jev uses a dedicated structured decision API; it is not a chat model interchangeable with DeepSeek.
 
-### Non listés
+### Unlisted
 
-| Modèle | Identifiant documenté |
+| Model | Documented ID |
 | --- | --- |
 | LL Alpha Free | `ll-alpha-free` |
 | Exo Free | `exo-free` |
 | MiMo-V2.5 Free | `mimo-v2.5-free` |
 | Nemotron 3 Ultra Free | `nemotron-3-ultra-free` |
 
-### Illimités
+### Unlimited
 
-La [documentation Go / Go Plus](https://opencode.ai/v2/docs/console/go/#usage-limits) affiche explicitement **Unlimited** pour **LongCat 2.5 Preview Free**, **Beam Free** et **MiniMax M3.1 Flash Free**, pendant leur période promotionnelle.
+The [Go / Go Plus documentation](https://opencode.ai/v2/docs/console/go/#usage-limits) explicitly lists **LongCat 2.5 Preview Free**, **Beam Free**, and **MiniMax M3.1 Flash Free** as **Unlimited** during their promotional period.
 
-Cette mention concerne les offres Go / Go Plus, dont l'abonnement est payant ; elle ne garantit pas un accès illimité à ces modèles avec une simple clé Console sans abonnement. Beam a aussi des restrictions géographiques, détaillées dans la documentation.
+This applies to the paid Go / Go Plus subscriptions; it does not guarantee unlimited access with a Console key without a subscription. Beam also has geographic restrictions, detailed in the documentation.
 
-Les autres modèles gratuits ne sont pas présentés ici comme illimités : leur gratuité est temporaire et ne garantit ni débit ni disponibilité. DeepSeek Free fonctionne avec la clé utilisée pour les essais de ce relais ; aucune promesse d'illimité n'est établie pour ce compte.
+Other free models are not described here as unlimited: free access is temporary and guarantees neither throughput nor availability. DeepSeek Free works with the key used to test this relay; unlimited access has not been established for that account.
 
-## Actualisation
+## Updates
 
 ```sh
 make refresh
 ```
 
-Le script récupère la dernière version officielle, extrait uniquement le protocole utile, teste une réponse et un aller-retour d'outil en streaming, puis supprime le binaire et ses dépendances temporaires. Pas besoin de conserver les sources OpenCode.
+The script downloads the latest official release, extracts only the required protocol, tests a response and a streaming tool round trip, then removes the binary and its temporary dependencies. There is no need to keep the OpenCode sources.
 
-**Si les essais échouent, le protocole fonctionnel et le service actuel sont conservés.** Une évolution incompatible peut nécessiter une adaptation du relais.
+**If the checks fail, the working protocol and current service are preserved.** An incompatible upstream change may require adapting the relay.
 
-`make install` réutilise un protocole existant ; une première installation utilise la version de référence **1.19.3**. L'extraction initiale, `make refresh` et `make verify` effectuent des requêtes au modèle gratuit.
+`make install` reuses an existing protocol; a fresh installation uses the reference version **1.19.3**. Initial extraction, `make refresh`, and `make verify` send requests to the free model.
 
 ## Configuration
 
 <details>
-<summary>Automatisation</summary>
+<summary>Automation</summary>
 
-Fournir `OPENCODE_API_KEY` dans l'environnement de `make install`. Le jeton local est généré séparément.
+Set `OPENCODE_API_KEY` in the environment when running `make install`. The local token is generated separately.
 
 </details>
 
-- Le code de ce dépôt et les tests, sans dépendance externe à installer.
-- `~/.config/opencode-local-api/environment` : votre clé amont et un jeton local distinct ; le dossier suit `XDG_CONFIG_HOME` si défini.
-- `harness.env` : uniquement le jeton local à charger dans le Harness.
-- `envelope.json` : protocole extrait sans clé API.
-- L'unité `systemd/user/opencode-local-api.service` : lance seulement Node.
+- Repository code and tests require no external dependencies to install.
+- `~/.config/opencode-local-api/environment`: your upstream key and a separate local token; the directory follows `XDG_CONFIG_HOME` when set.
+- `harness.env`: only the local token to load into the Harness.
+- `envelope.json`: extracted protocol without an API key.
+- `systemd/user/opencode-local-api.service`: runs only Node.
 
-Le service démarre à chaque connexion utilisateur. Après un déplacement du projet, relancer `make install`.
+The service starts at each user login. Run `make install` again after moving the project.
 
-La configuration est privée (`0700` pour le dossier, `0600` pour les fichiers). Aucun de ces fichiers locaux n'est publié. Chaque utilisateur du dépôt fournit sa propre clé. Le service écoute seulement sur `127.0.0.1` et exige le jeton local ; il ne journalise pas les messages ni les clés. Les requêtes transitent chez OpenCode et son fournisseur de modèle.
+Configuration is private (`0700` for the directory, `0600` for files). None of these local files are published. Each user supplies their own key. The service listens only on `127.0.0.1` and requires the local token; it does not log messages or keys. Requests pass through OpenCode and its model provider.
 
 ## Conversations
 
-Le relais conserve les messages et les outils de votre agent. Il n'ajoute plus le prompt système OpenCode complet et ne garde que deux définitions d'outils natifs de compatibilité (`bash` et `read`). Sur une petite requête de contrôle, la surcharge passe d'environ 7 800 à 2 000 tokens, soit environ 75 % de moins ; le gain dépend des outils déjà fournis par le client.
+The relay preserves your agent's messages and tools. It no longer prepends the full OpenCode system prompt and keeps only two native compatibility tool definitions (`bash` and `read`). On a small test request, overhead drops from roughly 7,800 to 2,000 tokens, about 75% less; savings depend on the tools already supplied by the client.
 
-Les en-têtes `x-opencode-session`, `x-opencode-session-id` et `x-dsh-session-id` sont reconnus. Chaque identité cliente est associée à un identifiant natif stable, renouvelé après 30 minutes. Sans en-tête, le relais utilise l'empreinte du premier message utilisateur pour garder la même route pendant les appels d'outils du Harness. Deux conversations ayant exactement le même premier message peuvent alors partager cette identité de routage ; chaque requête conserve son propre historique complet.
+The `x-opencode-session`, `x-opencode-session-id`, and `x-dsh-session-id` headers are recognized. Each client identity maps to a stable native identifier, renewed after 30 minutes. Without a header, the relay hashes the first user message to keep the same route during Harness tool calls. Two conversations with exactly the same first message may share this routing identity; each request retains its own complete history.
 
-Le cache conserve uniquement des empreintes et des identifiants, avec un maximum de 512 entrées, sans enregistrer les textes ni les clés. Les types invalides pour les messages, les outils ou le paramètre `stream` sont rejetés avec une erreur `400` avant tout appel au fournisseur.
+The cache stores only hashes and identifiers, with a maximum of 512 entries, without saving text or keys. Invalid types for messages, tools, or the `stream` parameter are rejected with a `400` error before any provider request.
 
-## Limites
+## Limitations
 
-Le profil Harness réserve une marge de contexte. Le relais n'exécute aucun outil : le Harness exécute les siens ; il peut refuser un outil natif qu'il ne connaît pas. L'extraction et les sondes réelles de `make refresh` vérifient que le protocole réduit reste accepté avant de l'installer.
+The Harness profile reserves some context space. The relay executes no tools: the Harness runs its own and may reject a native tool it does not recognize. Extraction and live probes in `make refresh` check that the reduced protocol is still accepted before installing it.
 
-Le relais reproduit le format de requête extrait et les identifiants natifs ; il ne fabrique aucune signature cryptographique. Le modèle gratuit et la compatibilité peuvent changer côté OpenCode. L'extraction initiale nécessite temporairement plusieurs centaines de Mo de disque et le moteur natif consomme de la mémoire pendant cette étape.
+The relay reproduces the extracted request format and native identifiers; it does not generate cryptographic signatures. The free model and compatibility may change on OpenCode's side. Initial extraction temporarily requires several hundred MB of disk space, and the native engine consumes memory during that step.
 
 <details>
-<summary>Désinstallation</summary>
+<summary>Uninstall</summary>
 
 ```sh
 systemctl --user disable --now opencode-local-api.service
 ```
 
-Retirer aussi la configuration du fournisseur dans votre Harness avant de supprimer le projet. Les clés et les éventuelles sauvegardes privées ne sont pas supprimées automatiquement.
+Remove the provider configuration from your Harness before deleting the project. Keys and any private backups are not deleted automatically.
 
 </details>
 
 ---
 
-## Projets voisins
+## Related projects
 
-- [zen-proxy](https://github.com/12errh/zen-proxy) : relais Node avec identifiants natifs et outils de compatibilité, ainsi que des routes OpenAI et Anthropic.
-- [opencode-free-bridge](https://github.com/raksix/opencode-free-bridge) : traduit Chat Completions vers un serveur `opencode serve` maintenu en fonctionnement.
-- [dsh-opencode-bridge](https://github.com/XucroYuri/dsh-opencode-bridge) : intégration expérimentale sous forme de plugin DeepSeek Harness.
+- [zen-proxy](https://github.com/12errh/zen-proxy): Node relay with native identifiers, compatibility tools, and OpenAI and Anthropic routes.
+- [opencode-free-bridge](https://github.com/raksix/opencode-free-bridge): translates Chat Completions to a continuously running `opencode serve` server.
+- [dsh-opencode-bridge](https://github.com/XucroYuri/dsh-opencode-bridge): experimental integration as a DeepSeek Harness plugin.
 
-Ces projets partagent le principe du relais local ; ils n'ont pas été installés ni validés avec cette configuration.
+These projects share the local relay approach; they have not been installed or validated with this configuration.
 
-[Licence MIT](LICENSE) · [OpenCode officiel](https://github.com/anomalyco/opencode) · [Version de référence](https://github.com/anomalyco/opencode/tree/v1.19.3)
+[MIT License](LICENSE) · [Official OpenCode](https://github.com/anomalyco/opencode) · [Reference version](https://github.com/anomalyco/opencode/tree/v1.19.3)
 
-Le codec d'identifiants provient de `packages/schema/src/identifier.ts`, sous licence MIT. Le logo a été créé avec `imagegen` : petit robot relais menthe et corail, deux prises, antenne éclair, fond transparent.
+The identifier codec comes from `packages/schema/src/identifier.ts`, under the MIT license. The logo was created with `imagegen`: a small mint and coral relay robot, two plugs, a lightning bolt antenna, and a transparent background.
