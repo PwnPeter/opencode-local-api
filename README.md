@@ -217,6 +217,8 @@ The cache stores only hashes and identifiers, with a maximum of 512 entries, wit
 
 The Harness profile reserves some context space. The relay executes no tools: the Harness runs its own and may reject a native tool it does not recognize. Extraction and live probes in `make refresh` check that the reduced protocol is still accepted before installing it.
 
+Temporary provider errors (HTTP 503) are retried up to three times. Explicit `Retry-After` instructions are passed to the client. If setup still stops, rerun `./setup` to resume with the saved key.
+
 The relay reproduces the extracted request format and native identifiers; it does not generate cryptographic signatures. The free model and compatibility may change on OpenCode's side. Initial extraction temporarily requires several hundred MB of disk space, and the native engine consumes memory during that step.
 
 <details>

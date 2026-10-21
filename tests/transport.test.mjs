@@ -5,10 +5,17 @@ import { createTransport } from '../src/transport.mjs'
 
 const requests = []
 let fixture = 'data: {"id":"r","choices":[{"delta":{"content":"OK"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+let unavailable = 0
 const server = createServer(async (request, response) => {
   let raw = ''
   for await (const chunk of request) raw += chunk
   requests.push({ body: JSON.parse(raw), headers: request.headers })
+  if (unavailable > 0) {
+    unavailable--
+    response.writeHead(503, { 'Content-Type': 'application/json' })
+    response.end(JSON.stringify({ error: { message: 'Endpoint is unavailable.' } }))
+    return
+  }
   response.setHeader('Content-Type', 'text/event-stream')
   response.write(fixture.slice(0, 19))
   setTimeout(() => response.end(fixture.slice(19)), 5)
@@ -81,6 +88,57 @@ test('bounds routing identities instead of retaining every conversation indefini
   const first = await send('thread-0')
   for (let i = 1; i <= 512; i++) await send(`thread-${i}`)
   assert.notEqual(await send('thread-0'), first)
+})
+
+test('recovers from temporary provider unavailability without changing conversation affinity', async () => {
+  unavailable = 2
+  const start = requests.length
+  const response = await complete({ messages: [{ role: 'user', content: 'retry probe' }] }, new AbortController().signal)
+  assert.equal(response.status, 200)
+  assert.equal((await response.json()).choices[0].message.content, 'OK')
+  const attempts = requests.slice(start)
+  assert.equal(attempts.length, 3)
+  assert.equal(new Set(attempts.map(r => r.headers['x-opencode-session'])).size, 1)
+  assert.equal(new Set(attempts.map(r => r.headers['x-opencode-request'])).size, 3)
+})
+
+test('returns the provider error after bounded retries', async t => {
+  unavailable = 10
+  t.after(() => { unavailable = 0 })
+  const start = requests.length
+  const response = await complete({ messages: [{ role: 'user', content: 'unavailable probe' }] }, new AbortController().signal)
+  assert.equal(response.status, 503)
+  assert.equal((await response.json()).error.message, 'Endpoint is unavailable.')
+  assert.equal(requests.length - start, 4)
+})
+
+test('cancellation stops provider retries', async () => {
+  const controller = new AbortController()
+  let calls = 0
+  const aborted = createTransport({ url: 'https://opencode.ai/inference/openai/v1/chat/completions',
+    headers: { 'user-agent': 'opencode/fixture' }, body: { messages: [], tools: [] } }, 'upstream-key', async () => {
+    calls++
+    setImmediate(() => controller.abort())
+    return new Response('unavailable', { status: 503 })
+  })
+  await assert.rejects(aborted({ messages: [{ role: 'user', content: 'cancel probe' }] }, controller.signal), { name: 'AbortError' })
+  assert.equal(calls, 1)
+})
+
+test('preserves authentication, rate limits and explicit provider retry instructions', async () => {
+  for (const status of [401, 403, 429, 503]) {
+    let calls = 0
+    const rejected = createTransport({ url: 'https://opencode.ai/inference/openai/v1/chat/completions',
+      headers: { 'user-agent': 'opencode/fixture' }, body: { messages: [], tools: [] } }, 'upstream-key', async () => {
+      calls++
+      return new Response('provider error', { status, headers: { 'Retry-After': '60' } })
+    })
+    const response = await rejected({ messages: [{ role: 'user', content: 'error probe' }] }, new AbortController().signal)
+    assert.equal(response.status, status)
+    assert.equal(response.headers.get('retry-after'), '60')
+    assert.equal(await response.text(), 'provider error')
+    assert.equal(calls, 1)
+  }
 })
 
 test('truncated or errored nonstream generations never become partial successes', async () => {

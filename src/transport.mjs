@@ -1,5 +1,6 @@
 import { assemble, identifier, prepareRequest } from './protocol.mjs'
 import { createHash } from 'node:crypto'
+import { setTimeout } from 'node:timers/promises'
 
 export function createTransport(envelope, apiKey, fetchRequest = fetch) {
   const url = new URL(envelope.url)
@@ -26,15 +27,21 @@ export function createTransport(envelope, apiKey, fetchRequest = fetch) {
 
   return async (body, signal, clientHeaders) => {
     const session = sessionFor(clientHeaders, body)
-    const response = await fetchRequest(url, {
-      method: 'POST', redirect: 'error', signal,
-      headers: {
-        ...envelope.headers, authorization: `Bearer ${apiKey}`,
-        'x-opencode-session': session, 'x-opencode-session-id': session,
-        'x-opencode-request': identifier('msg', false),
-      },
-      body: JSON.stringify(prepareRequest(envelope.body, body)),
-    })
+    let response
+    for (let attempt = 0; attempt < 4; attempt++) {
+      response = await fetchRequest(url, {
+        method: 'POST', redirect: 'error', signal,
+        headers: {
+          ...envelope.headers, authorization: `Bearer ${apiKey}`,
+          'x-opencode-session': session, 'x-opencode-session-id': session,
+          'x-opencode-request': identifier('msg', false),
+        },
+        body: JSON.stringify(prepareRequest(envelope.body, body)),
+      })
+      if (response.status !== 503 || attempt === 3 || response.headers.has('retry-after')) break
+      await response.body?.cancel()
+      await setTimeout(500 * 2 ** attempt, undefined, { signal })
+    }
     const headers = new Headers({ 'Cache-Control': 'no-store' })
     for (const name of ['content-type', 'retry-after', 'x-opencode-log-id'])
       if (response.headers.has(name)) headers.set(name, response.headers.get(name))
