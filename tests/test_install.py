@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import os
+import runpy
 import shutil
 from pathlib import Path
 import stat
@@ -23,6 +24,14 @@ if spec and spec.origin and Path(spec.origin).exists():
 class InstallTests(unittest.TestCase):
     def setUp(self):
         self.assertIsNotNone(installer, 'portable installer must exist')
+
+    def test_prepare_interruption_exits_with_resume_instructions(self):
+        with patch.object(sys, 'argv', ['install.py', 'prepare']), \
+                patch.object(subprocess, 'check_output', side_effect=KeyboardInterrupt):
+            with self.assertRaises(BaseException) as raised:
+                runpy.run_path(str(ROOT / 'scripts/install.py'), run_name='__main__')
+        self.assertIsInstance(raised.exception, SystemExit)
+        self.assertIn('resume', str(raised.exception))
 
     def test_first_install_keeps_private_credentials_after_interruption(self):
         with tempfile.TemporaryDirectory() as tmp:

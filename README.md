@@ -91,24 +91,26 @@ setup      Guided launcher
 
 ## Models
 
-**Checked on October 20, 2026.** Pricing comes from the [official documentation](https://opencode.ai/v2/docs/console/models/#pricing); catalog entries come from the [official models API](https://opencode.ai/inference/v1/models). Being listed by this API does not guarantee access for every account.
+**Checked on October 21, 2026.** Pricing comes from the [official documentation](https://opencode.ai/v2/docs/console/models/#pricing); catalog entries come from the [official models API](https://opencode.ai/inference/v1/models). Being listed by this API does not guarantee access for every account.
 
 ### Free
 
-| Model | ID |
-| --- | --- |
-| Big Pickle | `big-pickle` |
-| GLM-5.3-Flash Free | `glm-5.3-flash-free` |
-| **DeepSeek V4.1 Flash Free** | **`deepseek-v4.1-flash-free`** |
-| MiniMax M3.1 Flash Free | `minimax-m3.1-flash-free` |
-| Beam Free | `beam-free` |
-| LongCat 2.5 Preview Free | `longcat-2.5-preview-free` |
-| MiMo-V2.6-Flash Free | `mimo-v2.6-flash-free` |
-| Nemotron 3.5 Lightning Free | `nemotron-3.5-lightning-free` |
-| Nemotron 3.5 Super VL Free | `nemotron-3.5-super-vl-free` |
-| Jev 1.13 Free | `jev-1.13-free` |
+Sorted by published [Artificial Analysis Intelligence Index](https://artificialanalysis.ai/models/releases), highest first. Scores describe the underlying models at AA's tested reasoning settings, not measurements of OpenCode's free endpoints. All IDs below are listed by the OpenCode API; access and uptime depend on the account and provider.
 
-Jev uses a dedicated structured decision API; it is not a chat model interchangeable with DeepSeek.
+| Model | ID | AA index |
+| --- | --- | ---: |
+| MiniMax M3.1 Flash Free | `minimax-m3.1-flash-free` | 43 |
+| GLM-5.3-Flash Free | `glm-5.3-flash-free` | 42 |
+| **DeepSeek V4.1 Flash Free** | **`deepseek-v4.1-flash-free`** | **39†** |
+| MiMo-V2.6-Flash Free | `mimo-v2.6-flash-free` | 38 |
+| Beam Free | `beam-free` | 30 |
+| Nemotron 3.5 Super VL Free | `nemotron-3.5-super-vl-free` | 26 |
+| Nemotron 3.5 Lightning Free | `nemotron-3.5-lightning-free` | 13 |
+| Big Pickle | `big-pickle` | Not rated |
+| LongCat 2.5 Preview Free | `longcat-2.5-preview-free` | Not rated |
+| Jev 1.13 Free | `jev-1.13-free` | Not comparable |
+
+† [DeepSeek V4.1 Flash (Max), September release](https://artificialanalysis.ai/models/releases/deepseek-v4-1-flash). AA scores the later [1017 release](https://artificialanalysis.ai/models/comparisons/deepseek-v4-1-flash-1017-vs-deepseek-v4-1-flash) at 45; OpenCode's undated free ID does not confirm that revision. Beam's reference is Beam 1.0. Unrated models are not ranked below the others on capability. Jev uses a structured decision API rather than interchangeable chat.
 
 ### Unlisted
 

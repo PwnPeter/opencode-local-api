@@ -242,5 +242,7 @@ def main():
 if __name__ == '__main__':
     try:
         main()
+    except (KeyboardInterrupt, EOFError):
+        sys.exit('\nStopped. Rerun ./setup to resume; saved credentials are kept.')
     except (ValueError, OSError, subprocess.SubprocessError, tarfile.TarError, KeyError) as error:
         sys.exit(f'Installation failed: {error}')
