@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="#démarrage">Démarrage</a> ·
-  <a href="#harness">Harness</a> ·
+  <a href="#commandes">Commandes</a> ·
   <a href="#modèles">Modèles</a> ·
   <a href="#actualisation">Actualisation</a>
 </p>
@@ -30,19 +30,22 @@ Le relais tourne avec Node. Le moteur OpenCode complet sert uniquement à extrai
 git clone https://github.com/PwnPeter/opencode-local-api.git
 cd opencode-local-api
 make install
+npm install --global --prefix "$HOME/.local" @deepseek-ai/dsh@0.2.1-rc.2
+make harness
 ```
 
 ## Prérequis
 
 - Linux avec systemd utilisateur
-- Node.js 22+, Python 3.10+, curl, make
-- Clé API OpenCode
+- Node.js 24+, npm, Python 3.10+, curl, make, git
+- [Clé API OpenCode](https://opencode.ai/console/) : **Account → Personal API keys → Add API key → Create** ; à coller dans le terminal à la demande de `make install`. [Détails](https://opencode.ai/v2/docs/console/api/#personal-api-keys).
 - x86_64 ou ARM64 (testé sur Fedora x86_64)
 
 ## Commandes
 
 | Commande | Ce qu'elle fait |
 | --- | --- |
+| `make harness` | Ouvre le Harness avec l'API locale et `deepseek-v4.1-flash-free` configurés |
 | `make status` | Affiche l'état du service |
 | `make logs` | Suit les journaux |
 | `make start` / `make stop` | Démarre ou arrête le relais |
@@ -100,32 +103,6 @@ Le script récupère la dernière version officielle, extrait uniquement le prot
 **Si les essais échouent, le protocole fonctionnel et le service actuel sont conservés.** Une évolution incompatible peut nécessiter une adaptation du relais.
 
 `make install` réutilise un protocole existant ; une première installation utilise la version de référence **1.19.3**. L'extraction initiale, `make refresh` et `make verify` effectuent des requêtes au modèle gratuit.
-
-## Harness
-
-Importer les blocs de `dsh.patch.yml` dans votre profil Harness, ou les passer à une commande ponctuelle :
-
-```sh
-(
-  set -a
-  . "${XDG_CONFIG_HOME:-$HOME/.config}/opencode-local-api/harness.env"
-  dsh headless --patch ./dsh.patch.yml \
-    'Reply exactly RELAY_OK. Do not call tools.'
-)
-```
-
-Le fournisseur `opencode` utilise `http://127.0.0.1:4097/v1` et `OPENCODE_LOCAL_API_KEY`. Pour un Harness lancé par systemd, ajouter à son unité utilisateur, via `systemctl --user edit deepseek-harness.service` :
-
-```ini
-[Unit]
-Wants=opencode-local-api.service
-After=opencode-local-api.service
-
-[Service]
-EnvironmentFile=%h/.config/opencode-local-api/harness.env
-```
-
-Adapter le chemin si `XDG_CONFIG_HOME` est personnalisé, puis exécuter `systemctl --user daemon-reload` et `systemctl --user restart deepseek-harness.service`.
 
 ## Configuration
 
