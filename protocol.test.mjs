@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { assemble, identifier, prepareRequest } from './protocol.mjs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import Extract from './extract.mjs'
 
 test('identifiers retain native time encoding and format', () => {
   const msg = identifier('msg', false, 1_700_000_000_000)
@@ -11,15 +15,15 @@ test('identifiers retain native time encoding and format', () => {
   assert.notEqual(msg, identifier('msg', false, 1_700_000_000_000))
 })
 
-test('Harness messages and tools override matching native definitions', () => {
-  const native = { messages: [{ role: 'system', content: 'native' }], tools: [{ function: { name: 'read', description: 'native' } }, { function: { name: 'skill' } }] }
-  const body = { model: 'deepseek-v4.1-flash-free', messages: [{ role: 'tool', tool_call_id: 'a', content: 'result' }], tools: [{ function: { name: 'read', description: 'Harness' } }], stream: false, max_tokens: 20 }
+test('preserves the caller prompt and tools while trimming unnecessary native context', () => {
+  const native = { messages: [{ role: 'system', content: 'native instructions must not override the client' }], tools: [{ function: { name: 'bash' } }, { function: { name: 'read', description: 'native' } }, { function: { name: 'skill' } }] }
+  const body = { model: 'deepseek-v4.1-flash-free', messages: [{ role: 'system', content: 'Harness instructions' }, { role: 'tool', tool_call_id: 'a', content: 'result' }], tools: [{ function: { name: 'read', description: 'Harness' } }], stream: false, max_tokens: 20 }
   const result = prepareRequest(native, body)
   assert.equal(result.stream, true)
   assert.equal(result.max_tokens, 20)
-  assert.deepEqual(result.messages, [...native.messages, ...body.messages])
-  assert.deepEqual(result.tools, [{ function: { name: 'skill' } }, ...body.tools])
-  assert.equal(native.tools[0].function.description, 'native')
+  assert.deepEqual(result.messages, body.messages)
+  assert.deepEqual(result.tools, [{ function: { name: 'bash' } }, ...body.tools])
+  assert.equal(native.tools[1].function.description, 'native')
 })
 
 test('parallel tool argument fragments and trailing usage survive aggregation', () => {
@@ -32,4 +36,32 @@ test('parallel tool argument fragments and trailing usage survive aggregation', 
   assert.deepEqual(result.choices[0].message.tool_calls.map(call => [call.id, call.function.arguments]), [['a', '{"path":"a"}'], ['b', '{"path":"b"}']])
   assert.equal(result.choices[0].message.reasoning_content, 'reason')
   assert.equal(result.usage.total_tokens, 20)
+})
+
+test('extraction saves only the required protocol and leaves the real native request intact', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'relay-extract-test-'))
+  const previous = process.env.RELAY_ENVELOPE_OUTPUT
+  process.env.RELAY_ENVELOPE_OUTPUT = join(directory, 'envelope.json')
+  t.after(() => {
+    if (previous === undefined) delete process.env.RELAY_ENVELOPE_OUTPUT
+    else process.env.RELAY_ENVELOPE_OUTPUT = previous
+    rmSync(directory, { recursive: true, force: true })
+  })
+  const init = { headers: { Authorization: 'Bearer upstream-fixture' }, body: JSON.stringify({ model: 'deepseek-v4.1-flash-free',
+    messages: [{ role: 'system', content: 'private local context' }, { role: 'user', content: 'native probe' }],
+    tools: ['bash', 'read', 'task'].map(name => ({ type: 'function', function: { name } })),
+  }) }
+  let sent
+  t.mock.method(globalThis, 'fetch', async (_url, request) => { sent = request.body; return new Response('OK') })
+  const plugin = await Extract()
+  const config = {}
+  plugin.config(config)
+  await config.provider.opencode.options.fetch('https://opencode.ai/inference/openai/v1/chat/completions', init)
+  const raw = readFileSync(process.env.RELAY_ENVELOPE_OUTPUT, 'utf8')
+  const saved = JSON.parse(raw)
+  assert.deepEqual(saved.body.messages, [])
+  assert.deepEqual(saved.body.tools.map(tool => tool.function.name), ['bash', 'read'])
+  assert.equal(saved.headers.authorization, undefined)
+  assert.ok(!raw.includes('upstream-fixture') && !raw.includes('private local context'))
+  assert.equal(sent, init.body)
 })

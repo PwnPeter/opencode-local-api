@@ -34,9 +34,14 @@ export function createHandler({ token, complete }) {
     }
     if (!body || body.model !== MODEL || !Array.isArray(body.messages) || !body.messages.length)
       return failure(400, `Use ${MODEL} and a nonempty messages array`)
+    if (!body.messages.every(message => message && typeof message === 'object' && typeof message.role === 'string') ||
+        (body.stream !== undefined && typeof body.stream !== 'boolean') ||
+        (body.tools !== undefined && (!Array.isArray(body.tools) || !body.tools.every(tool =>
+          tool?.type === 'function' && typeof tool.function?.name === 'string' && tool.function.name.length > 0))))
+      return failure(400, 'Invalid messages, stream flag or function tools')
 
     try {
-      return await complete(body, AbortSignal.any([request.signal, AbortSignal.timeout(300_000)]))
+      return await complete(body, AbortSignal.any([request.signal, AbortSignal.timeout(300_000)]), request.headers)
     } catch (error) {
       return failure(error.name === 'TimeoutError' ? 504 : 502, 'OpenCode upstream request failed')
     }

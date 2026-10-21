@@ -73,6 +73,26 @@ test('bounds streamed request bodies even without content-length', async () => {
   assert.equal(requests.length, before)
 })
 
+test('rejects malformed tool definitions and stream flags before contacting upstream', async () => {
+  const before = requests.length
+  const base = { model: 'deepseek-v4.1-flash-free', messages: [{ role: 'user', content: 'hi' }] }
+  for (const extra of [{ tools: {} }, { tools: [null] }, { tools: [{ type: 'function', function: {} }] },
+    { tools: [{ type: 'function', function: { name: '' } }] }, { stream: 'false' }, { messages: [null] }])
+    assert.equal((await handler()(request({ ...base, ...extra }))).status, 400)
+  assert.equal(requests.length, before)
+})
+
+test('passes conversation identity to the transport without forwarding credentials as body fields', async () => {
+  let received
+  const handle = createHandler({ token: 'local-test-token', complete: async (body, _signal, headers) => {
+    received = { body, session: headers.get('x-opencode-session') }
+    return Response.json({ ok: true })
+  } })
+  const body = { model: 'deepseek-v4.1-flash-free', messages: [{ role: 'user', content: 'hi' }] }
+  assert.equal((await handle(request(body, { 'x-opencode-session': 'conversation-1' }))).status, 200)
+  assert.deepEqual(received, { body, session: 'conversation-1' })
+})
+
 test('preserves messages, tool results, reasoning and parameters while separating credentials', async () => {
   const body = {
     model: 'deepseek-v4.1-flash-free', stream: false,

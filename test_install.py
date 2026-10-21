@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -58,6 +59,15 @@ class InstallTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'checksum'):
                 installer.unpack_binary(archive, binary, '0' * 64)
             self.assertEqual(binary.read_bytes(), b'original binary')
+
+    def test_probe_diagnostics_report_status_without_replaying_sensitive_logs(self):
+        result = subprocess.CompletedProcess([], 1, stdout='Check: text\n', stderr='Error: HTTP 403; private-key-fixture\n')
+        with patch.object(installer.subprocess, 'run', return_value=result):
+            with self.assertRaises(ValueError) as raised:
+                installer.checked_run(['node', 'verify.mjs'], {}, 'Verification', 10)
+        self.assertIn('HTTP 403', str(raised.exception))
+        self.assertIn('during text', str(raised.exception))
+        self.assertNotIn('private-key-fixture', str(raised.exception))
 
     def test_failed_regeneration_preserves_the_working_protocol_and_removes_temporary_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:

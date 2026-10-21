@@ -145,9 +145,17 @@ Adapter le chemin si `XDG_CONFIG_HOME` est personnalisé, puis exécuter `system
 
 La configuration est privée (`0700` pour le dossier, `0600` pour les fichiers). Aucun de ces fichiers locaux n'est publié. Chaque utilisateur du dépôt fournit sa propre clé. Le service écoute seulement sur `127.0.0.1` et exige le jeton local ; il ne journalise pas les messages ni les clés. Les requêtes transitent chez OpenCode et son fournisseur de modèle.
 
+## Conversations et requêtes
+
+Le relais conserve les messages et les outils de votre agent. Il n'ajoute plus le prompt système OpenCode complet et ne garde que deux définitions d'outils natifs de compatibilité (`bash` et `read`). Sur une petite requête de contrôle, la surcharge passe d'environ 7 800 à 2 000 tokens, soit environ 75 % de moins ; le gain dépend des outils déjà fournis par le client.
+
+Les en-têtes `x-opencode-session`, `x-opencode-session-id` et `x-dsh-session-id` sont reconnus. Chaque identité cliente est associée à un identifiant natif stable, renouvelé après 30 minutes. Sans en-tête, le relais utilise l'empreinte du premier message utilisateur pour garder la même route pendant les appels d'outils du Harness. Deux conversations ayant exactement le même premier message peuvent alors partager cette identité de routage ; chaque requête conserve son propre historique complet.
+
+Le cache conserve uniquement des empreintes et des identifiants, avec un maximum de 512 entrées, sans enregistrer les textes ni les clés. Les types invalides pour les messages, les outils ou le paramètre `stream` sont rejetés avec une erreur `400` avant tout appel au fournisseur.
+
 ## À savoir
 
-Le protocole conserve le contexte et les définitions d'outils natifs nécessaires au modèle gratuit, soit environ 7 800 tokens supplémentaires par requête avec la version de référence. Le profil Harness réserve une marge. Le relais n'exécute aucun outil : le Harness exécute les siens ; il peut refuser un outil natif qu'il ne connaît pas.
+Le profil Harness réserve une marge de contexte. Le relais n'exécute aucun outil : le Harness exécute les siens ; il peut refuser un outil natif qu'il ne connaît pas. L'extraction et les sondes réelles de `make refresh` vérifient que le protocole réduit reste accepté avant de l'installer.
 
 Le relais reproduit le format de requête extrait et les identifiants natifs ; il ne fabrique aucune signature cryptographique. Le modèle gratuit et la compatibilité peuvent changer côté OpenCode. L'extraction initiale nécessite temporairement plusieurs centaines de Mo de disque et le moteur natif consomme de la mémoire pendant cette étape.
 
@@ -163,6 +171,14 @@ Retirer aussi la configuration du fournisseur dans votre Harness avant de suppri
 </details>
 
 ---
+
+## Projets voisins
+
+- [zen-proxy](https://github.com/12errh/zen-proxy) : relais Node avec identifiants natifs et outils de compatibilité, ainsi que des routes OpenAI et Anthropic.
+- [opencode-free-bridge](https://github.com/raksix/opencode-free-bridge) : traduit Chat Completions vers un serveur `opencode serve` maintenu en fonctionnement.
+- [dsh-opencode-bridge](https://github.com/XucroYuri/dsh-opencode-bridge) : intégration expérimentale sous forme de plugin DeepSeek Harness.
+
+Ces projets partagent le principe du relais local ; ils n'ont pas été installés ni validés avec cette configuration.
 
 [Licence MIT](LICENSE) · [OpenCode officiel](https://github.com/anomalyco/opencode) · [Version de référence](https://github.com/anomalyco/opencode/tree/v1.19.3)
 

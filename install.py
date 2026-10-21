@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import secrets
 import shlex
 import shutil
@@ -133,7 +134,9 @@ def checked_run(command, env, label, timeout):
         # Native logs may contain credentials or private context; do not replay them.
         phase = next((name for name in ['streaming tool result', 'tool call', 'text']
                       if f'Check: {name}' in result.stdout), '')
-        raise ValueError(f'{label} failed {"during " + phase if phase else ""} (exit {result.returncode}); current protocol preserved')
+        reason = re.search(r'HTTP [1-5]\d{2}|Text response check failed|Tool-call check failed|Streaming tool round-trip check failed|TimeoutError', result.stderr)
+        detail = f'{reason.group()}; ' if reason else ''
+        raise ValueError(f'{label} failed {"during " + phase if phase else ""} ({detail}exit {result.returncode}); current protocol preserved')
 
 
 def verify(envelope, values, node):

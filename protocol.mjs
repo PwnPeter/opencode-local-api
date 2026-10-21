@@ -15,8 +15,9 @@ export function prepareRequest(native, body) {
   const names = new Set((body.tools ?? []).map(tool => tool.function.name))
   return {
     ...native, ...body, stream: true, stream_options: { include_usage: true },
-    messages: [...native.messages.filter(message => message.role === 'system'), ...body.messages],
-    tools: [...(native.tools ?? []).filter(tool => !names.has(tool.function.name)), ...(body.tools ?? [])],
+    messages: body.messages,
+    // shortcut: the current gate accepts bash/read; refresh probes detect future incompatibilities.
+    tools: [...(native.tools ?? []).filter(tool => ['bash', 'read'].includes(tool.function.name) && !names.has(tool.function.name)), ...(body.tools ?? [])],
   }
 }
 
