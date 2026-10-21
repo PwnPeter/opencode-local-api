@@ -5,7 +5,7 @@
 <h1 align="center">OpenCode API</h1>
 
 <p align="center">
-  A small bridge between DeepSeek Harness and OpenCode.<br>
+  Access OpenCode's API from any OpenAI-compatible client.<br>
   <strong>Local · Lightweight · No npm dependencies</strong>
 </p>
 
@@ -19,7 +19,7 @@
 
 ---
 
-Exposes an **OpenAI Chat Completions** compatible API at `http://127.0.0.1:4097/v1`, with text, reasoning, tool calls, and streaming.
+Use OpenCode's API without keeping OpenCode running. The relay exposes an **OpenAI Chat Completions** compatible API at `http://127.0.0.1:4097/v1`, with text, reasoning, tool calls, and streaming.
 
 The relay runs on Node. The full OpenCode engine is used only to extract the required protocol, then removed along with its temporary dependencies. The Harness executes the tools.
 
