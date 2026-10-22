@@ -217,6 +217,10 @@ The service starts at each user login. Run `make install` again after moving the
 
 Configuration is private (`0700` for the directory, `0600` for files). None of these local files are published. Each user supplies their own key. The native service and published container port listen only on `127.0.0.1`. Both require the local token; the relay does not log messages or keys. Requests pass through OpenCode and its model provider.
 
+## IPv4
+
+Protocol extraction, verification, and the relay connect to OpenCode using IPv4 only, automatically, in native and Docker/Podman installs. IPv4 connectivity is required; provider quotas still apply. The local API defaults to `127.0.0.1:4097`.
+
 ## Conversations
 
 The relay preserves your agent's messages and tools. It no longer prepends the full OpenCode system prompt and keeps only two native compatibility tool definitions (`bash` and `read`). On a small test request, overhead drops from roughly 7,800 to 2,000 tokens, about 75% less; savings depend on the tools already supplied by the client.

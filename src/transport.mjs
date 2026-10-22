@@ -1,12 +1,13 @@
 import { assemble, identifier, prepareRequest } from './protocol.mjs'
 import { createHash } from 'node:crypto'
 import { setTimeout } from 'node:timers/promises'
+import { fetchIpv4 } from './http.mjs'
 
 export function apiKeysFromEnv(env = process.env) {
   return [env.OPENCODE_API_KEY, env.OPENCODE_API_KEY_BACKUP, ...(env.OPENCODE_API_KEYS || '').split(',').map(key => key.trim())]
 }
 
-export function createTransport(envelope, apiKey, fetchRequest = fetch) {
+export function createTransport(envelope, apiKey, fetchRequest = fetchIpv4) {
   const apiKeys = [...new Set([apiKey].flat().filter(Boolean))]
   const url = new URL(envelope.url)
   if (url.protocol !== 'https:' || url.hostname !== 'opencode.ai' || !url.pathname.endsWith('/chat/completions'))

@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs'
+import { fetchIpv4 } from '../src/http.mjs'
 
 // Loaded only during regeneration, inside an isolated official OpenCode process.
 export default async () => ({
@@ -13,7 +14,7 @@ export default async () => ({
       body.tools = body.tools.filter(tool => ['bash', 'read'].includes(tool.function.name))
       const headers = Object.fromEntries([...new Headers(init.headers)].filter(([name]) => name !== 'authorization'))
       writeFileSync(process.env.RELAY_ENVELOPE_OUTPUT, JSON.stringify({ version: process.env.RELAY_VERSION, url: String(url), headers, body }), { mode: 0o600 })
-      return fetch(url, init)
+      return fetchIpv4(url, init)
     }
   },
   async 'tool.execute.before'() { throw new Error('Tools are not executed during extraction') },
