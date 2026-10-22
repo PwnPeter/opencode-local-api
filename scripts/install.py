@@ -61,15 +61,22 @@ def unit_quote(value, executable=False):
 
 def credentials(config):
     existing = read_environment(config / 'environment')
-    key = os.environ.get('OPENCODE_API_KEY') or existing.get('OPENCODE_API_KEY')
+    extra_keys = list(dict.fromkeys(key.strip() for key in
+        (os.environ.get('OPENCODE_API_KEYS') or existing.get('OPENCODE_API_KEYS', '')).split(',') if key.strip()))
+    key = os.environ.get('OPENCODE_API_KEY') or existing.get('OPENCODE_API_KEY') or next(iter(extra_keys), None)
     if not key:
         if not sys.stdin.isatty():
-            raise ValueError('Run the setup guide in a terminal to enter your OpenCode API key, or set OPENCODE_API_KEY')
+            raise ValueError('Run the setup guide in a terminal to enter your OpenCode API key, or set OPENCODE_API_KEY or OPENCODE_API_KEYS')
         key = getpass.getpass('OpenCode API key (hidden): ').strip()
     values = {
         'OPENCODE_API_KEY': key,
         'OPENCODE_LOCAL_API_KEY': existing.get('OPENCODE_LOCAL_API_KEY') or secrets.token_urlsafe(32),
     }
+    backup = os.environ.get('OPENCODE_API_KEY_BACKUP') or existing.get('OPENCODE_API_KEY_BACKUP')
+    if backup:
+        values['OPENCODE_API_KEY_BACKUP'] = backup
+    if extra_keys:
+        values['OPENCODE_API_KEYS'] = ','.join(extra_keys)
     if any(not value or any(char in value for char in "\0\r\n'") for value in values.values()):
         raise ValueError('Credentials must be nonempty single-line values without apostrophes')
     return values

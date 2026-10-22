@@ -9,6 +9,8 @@ services:
       - relay-data:/data
     environment:
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      OPENCODE_API_KEY_BACKUP: ${OPENCODE_API_KEY_BACKUP:-}
+      OPENCODE_API_KEYS: ${OPENCODE_API_KEYS:-}
     cap_drop:
       - ALL
     security_opt:

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { after, test } from 'node:test'
-import { createTransport } from '../src/transport.mjs'
+import { apiKeysFromEnv, createTransport } from '../src/transport.mjs'
 
 const requests = []
 let fixture = 'data: {"id":"r","choices":[{"delta":{"content":"OK"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
@@ -22,10 +22,11 @@ const server = createServer(async (request, response) => {
 })
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 after(() => new Promise(resolve => server.close(resolve)))
-const complete = createTransport({
+const envelope = {
   url: 'https://opencode.ai/inference/openai/v1/chat/completions',
   headers: { 'user-agent': 'opencode/fixture' }, body: { messages: [], tools: [] },
-}, 'upstream-key', (_url, init) => fetch(`http://127.0.0.1:${server.address().port}`, init))
+}
+const complete = createTransport(envelope, 'upstream-key', (_url, init) => fetch(`http://127.0.0.1:${server.address().port}`, init))
 
 test('forces native streaming and aggregates it for nonstream clients', async () => {
   const result = await complete({ model: 'deepseek-v4.1-flash-free', messages: [{ role: 'user', content: 'hi' }], stream: false }, new AbortController().signal)
@@ -139,6 +140,123 @@ test('preserves authentication, rate limits and explicit provider retry instruct
     assert.equal(await response.text(), 'provider error')
     assert.equal(calls, 1)
   }
+})
+
+test('uses separate key sessions after rejected credentials or exhausted free usage, preserving the conversation', async () => {
+  for (const status of [401, 403, 429]) {
+    const attempts = []
+    const fallback = createTransport(envelope, ['primary-key', 'backup-key'], async (_url, init) => {
+      attempts.push(init)
+      if (init.headers.authorization !== 'Bearer backup-key')
+        return Response.json({ error: { type: 'FreeUsageLimitError' } }, { status })
+      return new Response('data: {"choices":[{"delta":{"content":"BACKUP_OK"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+    })
+    const response = await fallback({ messages: [{ role: 'user', content: 'backup probe' }] }, new AbortController().signal)
+    assert.equal(response.status, 200)
+    assert.equal((await response.json()).choices[0].message.content, 'BACKUP_OK')
+    assert.deepEqual(attempts.map(init => init.headers.authorization), ['Bearer primary-key', 'Bearer backup-key'])
+    assert.notEqual(attempts[0].headers['x-opencode-session'], attempts[1].headers['x-opencode-session'])
+    for (const attempt of attempts)
+      assert.equal(attempt.headers['x-opencode-session'], attempt.headers['x-opencode-session-id'])
+    assert.notEqual(attempts[0].headers['x-opencode-request'], attempts[1].headers['x-opencode-request'])
+    assert.equal(attempts[0].body, attempts[1].body)
+  }
+})
+
+test('rotates through three keys and keeps the working key and its session on later turns', async () => {
+  const attempts = []
+  const keys = apiKeysFromEnv({ OPENCODE_API_KEY: 'first', OPENCODE_API_KEY_BACKUP: 'second', OPENCODE_API_KEYS: ' second, third, ' })
+  const rotating = createTransport(envelope, keys, async (_url, init) => {
+    attempts.push(init)
+    if (init.headers.authorization !== 'Bearer third')
+      return Response.json({ error: { type: 'FreeUsageLimitError' } }, { status: 429 })
+    return new Response('data: {"choices":[{"delta":{"content":"THIRD_OK"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+  })
+  const messages = [{ role: 'user', content: 'rotation probe' }]
+  const headers = new Headers({ 'x-dsh-session-id': 'rotation-thread' })
+  const response = await rotating({ messages }, new AbortController().signal, headers)
+  assert.equal((await response.json()).choices[0].message.content, 'THIRD_OK')
+  assert.deepEqual(attempts.map(init => init.headers.authorization), ['Bearer first', 'Bearer second', 'Bearer third'])
+  assert.equal(new Set(attempts.map(init => init.headers['x-opencode-session'])).size, 3)
+  for (const attempt of attempts) assert.deepEqual(JSON.parse(attempt.body).messages, messages)
+  const session = attempts[2].headers['x-opencode-session']
+  messages.push({ role: 'assistant', content: 'THIRD_OK' }, { role: 'user', content: 'next turn' })
+  const next = await rotating({ messages }, new AbortController().signal, headers)
+  assert.equal(next.status, 200)
+  await next.body.cancel()
+  assert.equal(attempts.length, 4)
+  assert.equal(attempts[3].headers.authorization, 'Bearer third')
+  assert.equal(attempts[3].headers['x-opencode-session'], session)
+  assert.deepEqual(JSON.parse(attempts[3].body).messages, messages)
+})
+
+test('tries each distinct key once when the entire pool is exhausted', async () => {
+  const attempts = []
+  const rotating = createTransport(envelope, ['first', 'second', 'first', 'third'], async (_url, init) => {
+    attempts.push(init.headers.authorization)
+    return Response.json({ error: { type: 'FreeUsageLimitError', message: init.headers.authorization } },
+      { status: 429, headers: { 'Retry-After': '123' } })
+  })
+  const response = await rotating({ messages: [{ role: 'user', content: 'all exhausted' }] }, new AbortController().signal)
+  assert.deepEqual(attempts, ['Bearer first', 'Bearer second', 'Bearer third'])
+  assert.equal(response.status, 429)
+  assert.equal(response.headers.get('retry-after'), '123')
+  assert.equal((await response.json()).error.message, 'Bearer third')
+})
+
+test('late concurrent primary results do not undo rotation or skip the working key', { timeout: 2000 }, async () => {
+  const attempts = []
+  const pending = []
+  const rotating = createTransport(envelope, ['first', 'second', 'third'], async (_url, init) => {
+    attempts.push(init.headers.authorization)
+    if (init.headers.authorization === 'Bearer first')
+      return new Promise(resolve => pending.push(resolve))
+    return new Response('OK')
+  })
+  const body = { messages: [{ role: 'user', content: 'concurrent probe' }], stream: true }
+  const first = rotating(body, new AbortController().signal)
+  const duplicate = rotating(body, new AbortController().signal)
+  const late = rotating(body, new AbortController().signal)
+  const quota = () => Response.json({ error: { type: 'FreeUsageLimitError' } }, { status: 429 })
+  pending[0](quota())
+  assert.equal(await (await first).text(), 'OK')
+  pending[1](quota())
+  assert.equal(await (await duplicate).text(), 'OK')
+  pending[2](new Response('LATE_OK'))
+  assert.equal(await (await late).text(), 'LATE_OK')
+  const next = rotating(body, new AbortController().signal)
+  assert.equal(attempts.at(-1), 'Bearer second')
+  assert.equal(await (await next).text(), 'OK')
+  assert.deepEqual(attempts, ['Bearer first', 'Bearer first', 'Bearer first', 'Bearer second', 'Bearer second', 'Bearer second'])
+})
+
+test('leaves the backup unused for primary success, ordinary rate limits and provider retry instructions', async () => {
+  for (const status of [200, 400, 429, 503]) {
+    const attempts = []
+    const fallback = createTransport(envelope, ['primary-key', 'backup-key'], async (_url, init) => {
+      attempts.push(init.headers.authorization)
+      return Response.json({ error: { type: 'RateLimitError' } }, { status, headers: { 'Retry-After': '60' } })
+    })
+    const response = await fallback({ messages: [{ role: 'user', content: 'primary probe' }], stream: true }, new AbortController().signal)
+    assert.equal(response.status, status)
+    assert.equal(response.headers.get('retry-after'), '60')
+    await response.body.cancel()
+    assert.deepEqual(attempts, ['Bearer primary-key'])
+  }
+})
+
+test('stops after the backup fails and forwards its quota error and retry delay', async () => {
+  const attempts = []
+  const fallback = createTransport(envelope, ['primary-key', 'backup-key'], async (_url, init) => {
+    attempts.push(init.headers.authorization)
+    return Response.json({ error: { type: 'FreeUsageLimitError' } },
+      { status: attempts.length === 1 ? 401 : 429, headers: { 'Retry-After': '123' } })
+  })
+  const response = await fallback({ messages: [{ role: 'user', content: 'both rejected' }] }, new AbortController().signal)
+  assert.equal(response.status, 429)
+  assert.equal(response.headers.get('retry-after'), '123')
+  assert.equal((await response.json()).error.type, 'FreeUsageLimitError')
+  assert.deepEqual(attempts, ['Bearer primary-key', 'Bearer backup-key'])
 })
 
 test('truncated or errored nonstream generations never become partial successes', async () => {

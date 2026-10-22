@@ -112,6 +112,38 @@ class InstallTests(unittest.TestCase):
             self.assertNotIn('/home/peterpan', unit)
             self.assertNotIn('test-upstream-key', unit)
 
+    def test_three_keys_survive_reconfiguration_and_stay_out_of_harness_credentials(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp)
+            with patch.dict(os.environ, {
+                'OPENCODE_API_KEY': 'primary-fixture',
+                'OPENCODE_API_KEY_BACKUP': 'backup-fixture',
+                'OPENCODE_API_KEYS': ' third-fixture, , third-fixture ',
+            }, clear=True):
+                installer.save_credentials(config, installer.credentials(config))
+            original = installer.read_environment(config / 'environment')
+            with patch.dict(os.environ, {}, clear=True):
+                values = installer.credentials(config)
+                installer.save_credentials(config, values)
+            self.assertEqual(values, original)
+            self.assertEqual(values['OPENCODE_API_KEY'], 'primary-fixture')
+            self.assertEqual(values.get('OPENCODE_API_KEY_BACKUP'), 'backup-fixture')
+            self.assertEqual(values.get('OPENCODE_API_KEYS'), 'third-fixture')
+            self.assertEqual(stat.S_IMODE(config.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE((config / 'environment').stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE((config / 'harness.env').stat().st_mode), 0o600)
+            self.assertEqual(installer.read_environment(config / 'harness.env'), {
+                'OPENCODE_LOCAL_API_KEY': values['OPENCODE_LOCAL_API_KEY'],
+            })
+
+    def test_key_list_can_supply_the_initial_primary_without_a_prompt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {'OPENCODE_API_KEYS': ' first-fixture, second-fixture, first-fixture, third-fixture '}, clear=True), \
+                    patch.object(installer.getpass, 'getpass', side_effect=AssertionError('unexpected key prompt')):
+                values = installer.credentials(Path(tmp))
+            self.assertEqual(values['OPENCODE_API_KEY'], 'first-fixture')
+            self.assertEqual(values['OPENCODE_API_KEYS'], 'first-fixture,second-fixture,third-fixture')
+
     def test_checksum_failure_does_not_replace_existing_binary(self):
         with tempfile.TemporaryDirectory() as tmp:
             archive = Path(tmp) / 'archive.tar.gz'

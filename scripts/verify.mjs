@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { createTransport, readChunks } from '../src/transport.mjs'
+import { apiKeysFromEnv, createTransport, readChunks } from '../src/transport.mjs'
 
 const envelope = JSON.parse(readFileSync(process.argv[2], 'utf8'))
-const complete = createTransport(envelope, process.env.OPENCODE_API_KEY)
+const complete = createTransport(envelope, apiKeysFromEnv())
 const model = 'deepseek-v4.1-flash-free'
 const nonce = `RELAY_${crypto.randomUUID().replaceAll('-', '')}`
 const base = { model, thinking: { type: 'disabled' }, max_tokens: 256 }

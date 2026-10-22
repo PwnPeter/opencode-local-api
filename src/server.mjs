@@ -4,7 +4,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { setTimeout } from 'node:timers/promises'
 import { createHandler } from './relay.mjs'
-import { createTransport } from './transport.mjs'
+import { apiKeysFromEnv, createTransport } from './transport.mjs'
 
 if (process.argv.includes('--check')) {
   let ready = false
@@ -21,7 +21,8 @@ if (process.argv.includes('--check')) {
   if (!ready) throw new Error('Local relay did not become ready')
 } else {
   const envelope = JSON.parse(readFileSync(process.env.RELAY_ENVELOPE_FILE, 'utf8'))
-  const handle = createHandler({ token: process.env.OPENCODE_LOCAL_API_KEY, complete: createTransport(envelope, process.env.OPENCODE_API_KEY) })
+  const handle = createHandler({ token: process.env.OPENCODE_LOCAL_API_KEY,
+    complete: createTransport(envelope, apiKeysFromEnv()) })
   const server = createServer(async (incoming, outgoing) => {
     const controller = new AbortController()
     outgoing.on('close', () => controller.abort())

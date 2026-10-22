@@ -194,8 +194,20 @@ Set `OPENCODE_API_KEY` in the environment when running `make install`. The local
 
 </details>
 
+### Keys
+
+```sh
+OPENCODE_API_KEYS='key-one,key-two,key-three' make install
+```
+
+`OPENCODE_API_KEYS` accepts a comma-separated list, also available to Compose. Keys are tried in this order: `OPENCODE_API_KEY`, legacy `OPENCODE_API_KEY_BACKUP`, then `OPENCODE_API_KEYS`. Blank and duplicate entries are skipped. With only the list set on first installation, its first key becomes the primary. Saved keys are reused after setup or updates.
+
+The relay switches keys on `401`/`403` or quota `429` with `FreeUsageLimitError`. Later requests start with the selected key until another switch or a relay restart. Each request visits the key pool at most once; temporary `503` errors keep the existing retry behavior on the same key. Other `429` responses and `503` with `Retry-After` are forwarded unchanged. Separate keys do not guarantee separate quotas.
+
+Native protocol extraction uses the primary key. Verification and the running relay use the full pool.
+
 - Repository code and tests require no external dependencies to install.
-- `~/.config/opencode-local-api/environment`: your upstream key and a separate local token; the directory follows `XDG_CONFIG_HOME` when set.
+- `~/.config/opencode-local-api/environment`: your upstream keys and a separate local token; the directory follows `XDG_CONFIG_HOME` when set.
 - `harness.env`: only the local token to load into the Harness.
 - `envelope.json`: extracted protocol without an API key.
 - Docker/Podman: the same private files are stored in the `relay-data` volume, outside the repository.
@@ -209,7 +221,7 @@ Configuration is private (`0700` for the directory, `0600` for files). None of t
 
 The relay preserves your agent's messages and tools. It no longer prepends the full OpenCode system prompt and keeps only two native compatibility tool definitions (`bash` and `read`). On a small test request, overhead drops from roughly 7,800 to 2,000 tokens, about 75% less; savings depend on the tools already supplied by the client.
 
-The `x-opencode-session`, `x-opencode-session-id`, and `x-dsh-session-id` headers are recognized. Each client identity maps to a stable native identifier, renewed after 30 minutes. Without a header, the relay hashes the first user message to keep the same route during Harness tool calls. Two conversations with exactly the same first message may share this routing identity; each request retains its own complete history.
+The `x-opencode-session`, `x-opencode-session-id`, and `x-dsh-session-id` headers are recognized. Each conversation gets a separate native `x-opencode-session` for each API key, renewed after 30 minutes. Switching keys does not reuse the previous key's native session. Without a header, the relay hashes the first user message to keep the same route during Harness tool calls. Two conversations with exactly the same first message may share this routing identity; each request retains its own complete history.
 
 The cache stores only hashes and identifiers, with a maximum of 512 entries, without saving text or keys. Invalid types for messages, tools, or the `stream` parameter are rejected with a `400` error before any provider request.
 
