@@ -1,0 +1,12 @@
+[Unit]
+Description=Verify configured OpenCode routes and select a working route
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=@ENVIRONMENT@
+UMask=0077
+WorkingDirectory=@PROJECT@
+ExecStart=@NODE@ @PROJECT@/scripts/retest.mjs @PLAN@ --select
+TimeoutStartSec=4min50s
+TimeoutStopSec=5s

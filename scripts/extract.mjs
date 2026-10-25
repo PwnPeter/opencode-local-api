@@ -1,21 +1,24 @@
 import { writeFileSync } from 'node:fs'
-import { fetchIpv4 } from '../src/http.mjs'
 
-// Loaded only during regeneration, inside an isolated official OpenCode process.
-export default async () => ({
-  config(config) {
-    config.provider ??= {}
-    config.provider.opencode ??= {}
-    config.provider.opencode.options ??= {}
-    config.provider.opencode.options.fetch = async (url, init) => {
-      const body = JSON.parse(init.body)
-      if (body.model !== 'deepseek-v4.1-flash-free') throw new Error('Only the free model is allowed')
-      body.messages = []
-      body.tools = body.tools.filter(tool => ['bash', 'read'].includes(tool.function.name))
-      const headers = Object.fromEntries([...new Headers(init.headers)].filter(([name]) => name !== 'authorization'))
-      writeFileSync(process.env.RELAY_ENVELOPE_OUTPUT, JSON.stringify({ version: process.env.RELAY_VERSION, url: String(url), headers, body }), { mode: 0o600 })
-      return fetchIpv4(url, init)
-    }
+// OpenCode 2's supported HTTP hook stops extraction before any provider request.
+export default {
+  id: 'relay.local-capture',
+  async setup(ctx) {
+    await ctx.session.hook('http.request', async ({ request }) => {
+      let body = await request.clone().json()
+      const url = new URL(request.url)
+      if (url.origin !== 'https://opencode.ai' || !url.pathname.endsWith('/chat/completions') ||
+          body.model !== 'deepseek-v4.1-flash-free') throw new Error('Unexpected extraction request')
+      body.messages = body.messages.filter(message => message.role === 'system')
+      let template = JSON.stringify(body)
+      for (const [path, replacement] of [[process.env.RELAY_CAPTURE_DIRECTORY || process.cwd(), '{{RELAY_WORKSPACE}}'], [process.env.HOME, '{{RELAY_HOME}}']])
+        if (path) template = template.replaceAll(path, replacement)
+      body = JSON.parse(template)
+      const headers = Object.fromEntries([...request.headers].filter(([name]) =>
+        ['content-type', 'accept', 'user-agent', 'x-opencode-client'].includes(name)))
+      writeFileSync(process.env.RELAY_ENVELOPE_OUTPUT,
+        JSON.stringify({ version: ctx.app.version, url: request.url, headers, body }), { mode: 0o600 })
+      throw new Error('RELAY_CAPTURE_COMPLETE_NO_NETWORK')
+    }, { providerID: 'opencode' })
   },
-  async 'tool.execute.before'() { throw new Error('Tools are not executed during extraction') },
-})
+}

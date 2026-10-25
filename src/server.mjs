@@ -5,6 +5,10 @@ import { pipeline } from 'node:stream/promises'
 import { setTimeout } from 'node:timers/promises'
 import { createHandler } from './relay.mjs'
 import { apiKeysFromEnv, createTransport } from './transport.mjs'
+import { proxiesFromEnv, startProxyTunnels } from './proxy.mjs'
+import { createProjectStore, projectStoreFile } from './projects.mjs'
+import { createPreferredTransport } from './preferred.mjs'
+import { createAttemptLogger } from './audit.mjs'
 
 if (process.argv.includes('--check')) {
   let ready = false
@@ -21,8 +25,14 @@ if (process.argv.includes('--check')) {
   if (!ready) throw new Error('Local relay did not become ready')
 } else {
   const envelope = JSON.parse(readFileSync(process.env.RELAY_ENVELOPE_FILE, 'utf8'))
-  const handle = createHandler({ token: process.env.OPENCODE_LOCAL_API_KEY,
-    complete: createTransport(envelope, apiKeysFromEnv()) })
+  const proxies = proxiesFromEnv()
+  if (!process.env.RELAY_PINNED_ROUTE_FILE) startProxyTunnels(proxies)
+  const projects = createProjectStore(projectStoreFile(), undefined, proxies?.map(proxy => proxy.ip))
+  const keys = apiKeysFromEnv()
+  const audit = createAttemptLogger(keys)
+  const fallback = createTransport(envelope, keys, undefined, proxies, undefined, projects, audit)
+  const complete = await createPreferredTransport(envelope, keys, fallback, projects, process.env, undefined, audit)
+  const handle = createHandler({ token: process.env.OPENCODE_LOCAL_API_KEY, complete })
   const server = createServer(async (incoming, outgoing) => {
     const controller = new AbortController()
     outgoing.on('close', () => controller.abort())

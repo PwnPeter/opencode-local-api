@@ -1,8 +1,10 @@
 import { lookup } from 'node:dns'
 import https from 'node:https'
 import { Readable } from 'node:stream'
+import { fetchProxy } from './proxy.mjs'
 
-export function fetchIpv4(url, { method, headers, body, signal }) {
+export function fetchIpv4(url, { method, headers, body, signal, proxy }) {
+  if (proxy) return fetchProxy(url, { method, headers, body, signal, proxy })
   return new Promise((resolve, reject) => {
     const request = https.request(url, {
       method, signal, family: 4, headers: { ...Object.fromEntries(new Headers(headers)), 'accept-encoding': 'identity' },

@@ -11,14 +11,23 @@ export function identifier(prefix, descending, timestamp = Date.now()) {
   return `${prefix}_${time}${Array.from(randomBytes(14), byte => '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'[byte % 62]).join('')}`
 }
 
-export function prepareRequest(native, body) {
+export function prepareRequest(native, body, project = 'local') {
   const names = new Set((body.tools ?? []).map(tool => tool.function.name))
-  return {
+  const prefix = (native.messages ?? []).filter(message => message.role === 'system').map(message => ({ ...message,
+    content: message.content.replaceAll('{{RELAY_WORKSPACE}}', '/workspace/' + project)
+      .replaceAll('{{RELAY_HOME}}', '/workspace/' + project + '/home')
+      .replace(/^Today's date:.*$/m, "Today's date: " + new Date().toDateString()),
+  }))
+  const request = {
     ...native, ...body, stream: true, stream_options: { include_usage: true },
-    messages: body.messages,
-    // shortcut: the current gate accepts bash/read; refresh probes detect future incompatibilities.
-    tools: [...(native.tools ?? []).filter(tool => ['bash', 'read'].includes(tool.function.name) && !names.has(tool.function.name)), ...(body.tools ?? [])],
+    messages: prefix.length ? [...prefix, ...body.messages] : body.messages,
+    tools: [...(native.tools ?? []).filter(tool => !names.has(tool.function.name)), ...(body.tools ?? [])],
   }
+  if (native.max_completion_tokens !== undefined) {
+    request.max_completion_tokens = body.max_completion_tokens ?? body.max_tokens ?? native.max_completion_tokens
+    delete request.max_tokens
+  }
+  return request
 }
 
 export function assemble(chunks) {

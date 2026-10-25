@@ -1,8 +1,17 @@
 import { readFileSync } from 'node:fs'
 import { apiKeysFromEnv, createTransport, readChunks } from '../src/transport.mjs'
+import { createProjectStore, projectStoreFile } from '../src/projects.mjs'
+import { proxiesFromEnv } from '../src/proxy.mjs'
+import { createPreferredTransport } from '../src/preferred.mjs'
+import { createAttemptLogger } from '../src/audit.mjs'
 
 const envelope = JSON.parse(readFileSync(process.argv[2], 'utf8'))
-const complete = createTransport(envelope, apiKeysFromEnv())
+const proxies = proxiesFromEnv()
+const projects = createProjectStore(projectStoreFile(), undefined, proxies?.map(proxy => proxy.ip))
+const keys = apiKeysFromEnv()
+const audit = createAttemptLogger(keys)
+const fallback = createTransport(envelope, keys, undefined, proxies, undefined, projects, audit)
+const complete = await createPreferredTransport(envelope, keys, fallback, projects, process.env, undefined, audit)
 const model = 'deepseek-v4.1-flash-free'
 const nonce = `RELAY_${crypto.randomUUID().replaceAll('-', '')}`
 const base = { model, thinking: { type: 'disabled' }, max_tokens: 256 }
@@ -32,3 +41,4 @@ const streamed = await call({ stream: true, tools, tool_choice: 'none', messages
 ] })
 if (!streamed.includes(nonce)) throw new Error('Streaming tool round-trip check failed')
 console.log('Verified: text, native identifiers, tool call, tool result, complete SSE stream')
+await complete.close?.()

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { after, test } from 'node:test'
 import { createHandler } from '../src/relay.mjs'
+import { setTimeout as pause } from 'node:timers/promises'
 
 const requests = []
 const upstream = createServer(async (request, response) => {
@@ -119,4 +120,11 @@ test('preserves upstream errors and retry headers', async () => {
   assert.equal(response.status, 429)
   assert.equal(response.headers.get('retry-after'), '3')
   assert.deepEqual(await response.json(), { error: { message: 'rate limited' } })
+})
+
+test('returns 504 when a request deadline cancels discovery or its retry delay', async t => {
+  t.mock.method(AbortSignal, 'timeout', () => AbortSignal.abort(new DOMException('deadline', 'TimeoutError')))
+  const handle = createHandler({ token: 'local-test-token', complete: async (_body, signal) => pause(1000, undefined, { signal }) })
+  const response = await handle(request({ model: 'deepseek-v4.1-flash-free', messages: [{ role: 'user', content: 'hi' }] }))
+  assert.equal(response.status, 504)
 })

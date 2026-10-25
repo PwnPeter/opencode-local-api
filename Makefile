@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := install
 PYTHON ?= python3
 
-.PHONY: install refresh verify start stop restart status logs test harness
+.PHONY: install refresh verify start stop restart status logs test harness proxies
 
 install:
 	$(PYTHON) scripts/install.py
@@ -18,6 +18,9 @@ refresh:
 
 verify:
 	$(PYTHON) scripts/install.py verify
+
+proxies:
+	$(PYTHON) scripts/proxies.py --vpngate
 
 start stop restart status:
 	systemctl --user $@ opencode-local-api.service

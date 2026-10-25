@@ -4,3 +4,12 @@ node_modules/
 .env.*
 __pycache__/
 *.log
+*.jsonl
+*.sqlite*
+environment
+pinned-route.json
+retest-plan*.json
+network-labels.json
+key4-test
+diagnostics/
+retests/

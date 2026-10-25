@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Extract the necessary native protocol, verify it, discard the native runtime."""
+"""Extract and verify native protocol; retain its HTTPS runtime for compatibility."""
 import getpass
+import base64
 import hashlib
 import json
 import os
@@ -16,10 +17,10 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '1.19.3'
+VERSION = '2.1.4'
 CHECKSUMS = {
-    'x64': '13a8fb2978302071b86f9d7e00da9c8895f9cd846978379c3bdc6a5333536c9b',
-    'arm64': '7900818a6a98881edbbadab4b7525940eff3b9750040c200481f9f56cacee405',
+    'x64-baseline': 'sha512-0/H4wRDAW4hA5IWN440XwDrRATbvT3cno+UUsqFynTu0TeGXNADjK2AZfvhNTfyJaVyCa+v7VhB+r7ghuMa5EQ==',
+    'arm64': 'sha512-drw0LWMG0niaE94ePXm1h7qjFBZZRcSZD3gact3hx3OYPXesp7xrOt0bn3sicYNUN6fojERrDKR6jYrXmZX+rA==',
 }
 SERVICE = 'opencode-local-api.service'
 
@@ -77,6 +78,15 @@ def credentials(config):
         values['OPENCODE_API_KEY_BACKUP'] = backup
     if extra_keys:
         values['OPENCODE_API_KEYS'] = ','.join(extra_keys)
+    proxy_file = os.environ.get('RELAY_PROXIES_FILE') or existing.get('RELAY_PROXIES_FILE')
+    if not proxy_file and (config / 'proxies.json').exists():
+        proxy_file = str(config / 'proxies.json')
+    if proxy_file:
+        values['RELAY_PROXIES_FILE'] = proxy_file
+    for name in ['RELAY_PREFERRED_INTERFACE', 'RELAY_PREFERRED_KEY_FINGERPRINT', 'RELAY_PREFERRED_CONNECTION_UUID', 'RELAY_PREFERRED_REQUIRED', 'RELAY_PINNED_ROUTE_FILE']:
+        value = os.environ.get(name) or existing.get(name)
+        if value:
+            values[name] = value
     if any(not value or any(char in value for char in "\0\r\n'") for value in values.values()):
         raise ValueError('Credentials must be nonempty single-line values without apostrophes')
     return values
@@ -106,14 +116,14 @@ def configure(project, config, units, node, values):
 
 
 def unpack_binary(archive, binary, expected):
-    digest = hashlib.sha256()
+    digest = hashlib.sha512()
     with archive.open('rb') as file:
         for chunk in iter(lambda: file.read(1024 * 1024), b''):
             digest.update(chunk)
-    if digest.hexdigest() != expected:
+    if 'sha512-' + base64.b64encode(digest.digest()).decode() != expected:
         raise ValueError('OpenCode download checksum mismatch; existing binary preserved')
     with tarfile.open(archive, 'r:gz') as tar:
-        member = tar.getmember('opencode')
+        member = tar.getmember('package/bin/opencode')
         if not member.isfile():
             raise ValueError('OpenCode release must contain a regular opencode executable')
         with tar.extractfile(member) as source, tempfile.NamedTemporaryFile(dir=binary.parent, delete=False) as target:
@@ -124,24 +134,24 @@ def unpack_binary(archive, binary, expected):
 
 
 def release(refresh):
-    arch = {'x86_64': 'x64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine())
+    arch = {'x86_64': 'x64-baseline', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine())
     if not arch:
         raise ValueError('Supported architectures: Linux x86_64 and ARM64')
-    name = f'opencode-linux-{arch}.tar.gz'
+    package = f'cli-linux-{arch}'
     if refresh:
         metadata = json.loads(subprocess.check_output([
             'curl', '--fail', '--silent', '--show-error', '--proto', '=https', '--max-time', '30',
-            'https://api.github.com/repos/anomalyco/opencode/releases/latest',
+            f'https://registry.npmjs.org/@opencode%2F{package}/latest',
         ], text=True))
-        asset = next((item for item in metadata['assets'] if item['name'] == name), None)
-        if not asset or not asset.get('digest', '').startswith('sha256:'):
-            raise ValueError('Official release has no SHA-256 for this platform')
-        return metadata['tag_name'].removeprefix('v'), asset['browser_download_url'], asset['digest'][7:]
-    return VERSION, f'https://github.com/anomalyco/opencode/releases/download/v{VERSION}/{name}', CHECKSUMS[arch]
+        dist = metadata['dist']
+        if not dist.get('integrity', '').startswith('sha512-') or not dist.get('tarball', '').startswith(f'https://registry.npmjs.org/@opencode/{package}/-/'):
+            raise ValueError('Official release has no verified download for this platform')
+        return metadata['version'], dist['tarball'], dist['integrity']
+    return VERSION, f'https://registry.npmjs.org/@opencode/{package}/-/{package}-{VERSION}.tgz', CHECKSUMS[arch]
 
 
-def checked_run(command, env, label, timeout):
-    result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=timeout)
+def checked_run(command, env, label, timeout, cwd=None):
+    result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=timeout, cwd=cwd)
     if result.returncode:
         # Native logs may contain credentials or private context; do not replay them.
         phase = next((name for name in ['streaming tool result', 'tool call', 'text']
@@ -161,40 +171,65 @@ def regenerate(config, values, node, refresh):
     with tempfile.TemporaryDirectory(prefix='opencode-relay-') as tmp:
         work = Path(tmp)
         binary = work / 'opencode'
-        print(f'Extracting OpenCode {version}; temporary runtime will be deleted...', flush=True)
+        print(f'Extracting OpenCode {version}; verifying its native HTTPS runtime...', flush=True)
         archive = work / 'release.tar.gz'
         subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error', '--proto', '=https',
                         '--proto-redir', '=https', '--max-time', '180', '--output', str(archive), url], check=True)
         unpack_binary(archive, binary, digest)
         model = 'opencode/deepseek-v4.1-flash-free'
-        settings = {
-            'plugin': [(ROOT / 'scripts/extract.mjs').as_uri()], 'enabled_providers': ['opencode'],
-            'model': model, 'small_model': model,
-            'provider': {'opencode': {'whitelist': ['deepseek-v4.1-flash-free']}},
-            'permission': {'*': 'allow'}, 'share': 'disabled', 'autoupdate': False,
-        }
-        (work / 'opencode.json').write_text(json.dumps(settings))
+        plugin = work / 'project/.opencode/plugins/relay-capture/index.ts'
+        plugin.parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / 'scripts/extract.mjs', plugin)
         candidate = work / 'envelope.json'
-        env = {key: value for key, value in os.environ.items() if not key.startswith(('OPENCODE_', 'RELAY_'))}
+        env = {key: value for key, value in os.environ.items() if key in ['PATH', 'LANG', 'LC_ALL', 'TZ']}
         env.update({
             'HOME': tmp, 'XDG_CONFIG_HOME': str(work / 'config'), 'XDG_DATA_HOME': str(work / 'data'),
             'XDG_CACHE_HOME': str(work / 'cache'), 'XDG_STATE_HOME': str(work / 'state'),
-            'OPENCODE_CONFIG': str(work / 'opencode.json'), 'OPENCODE_CONFIG_DIR': str(work / 'config/opencode'),
-            'OPENCODE_API_KEY': values['OPENCODE_API_KEY'],
-            'RELAY_ENVELOPE_OUTPUT': str(candidate), 'RELAY_VERSION': version,
+            'OPENCODE_API_KEY': 'public', 'RELAY_ENVELOPE_OUTPUT': str(candidate),
+            'RELAY_CAPTURE_DIRECTORY': str(work / 'project'),
+            'HTTP_PROXY': 'http://127.0.0.1:9', 'HTTPS_PROXY': 'http://127.0.0.1:9',
+            'ALL_PROXY': 'http://127.0.0.1:9', 'NO_PROXY': 'localhost,127.0.0.1,::1',
         })
         marker = 'PROTOCOL_' + secrets.token_hex(12)
-        checked_run([str(binary), 'run', '--dir', tmp, '--format', 'json', '--model', model,
-                     '--title', 'Local relay protocol extraction', f'Reply exactly {marker}. Do not call tools.'],
-                    env, 'Isolated native extraction', 240)
+        try:
+            checked_run([str(binary), 'run', '--standalone', '--format', 'json', '--model', model,
+                         '--title', 'Local relay protocol extraction', f'Reply exactly {marker}. Do not call tools.'],
+                        env, 'Isolated native extraction', 60, cwd=work / 'project')
+        except ValueError:
+            # The capture hook deliberately aborts before sending the request.
+            if not candidate.is_file():
+                raise
         if not candidate.is_file():
             raise ValueError('Native extraction produced no protocol; current protocol preserved')
-        verify(candidate, values, node)
+        verify(candidate, {**values, 'RELAY_NATIVE_RUNTIME_FILE': str(binary)}, node)
         content = candidate.read_text()
         if any(value in content for value in values.values()):
             raise ValueError('Extraction unexpectedly contains credentials; refusing to install')
-        changed = private_write(config / 'envelope.json', content)
-    print('Verified: text, tool call, tool result and complete streaming response. Native runtime removed.', flush=True)
+        with binary.open('rb') as source, tempfile.NamedTemporaryFile(dir=config, delete=False) as target:
+            shutil.copyfileobj(source, target)
+            runtime = Path(target.name)
+        runtime.chmod(0o700)
+        destination = config / 'native-runtime'
+        previous = config / ('native-runtime.previous-' + secrets.token_hex(8)) if destination.exists() else None
+        published = False
+        try:
+            if previous:
+                os.link(destination, previous)
+            os.replace(runtime, destination)
+            published = True
+            changed = private_write(config / 'envelope.json', content)
+        except BaseException:
+            if published:
+                if previous:
+                    os.replace(previous, destination)
+                else:
+                    destination.unlink(missing_ok=True)
+            runtime.unlink(missing_ok=True)
+            raise
+        else:
+            if previous:
+                previous.unlink()
+    print('Verified: text, tool call, tool result and complete streaming response. Native HTTPS runtime retained.', flush=True)
     return changed
 
 
@@ -210,8 +245,8 @@ def main():
             raise ValueError(f'Missing prerequisite: {command}')
     node = Path(shutil.which('node')).resolve()
     version = subprocess.check_output([str(node), '--version'], text=True).strip()
-    if int(version.lstrip('v').split('.')[0]) < 22:
-        raise ValueError('Node.js 22 or newer is required')
+    if tuple(map(int, version.lstrip('v').split('.')[:2])) < (22, 19):
+        raise ValueError('Node.js 22.19 or newer is required')
     base = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config').resolve()
     config = base / 'opencode-local-api'
     config.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -225,7 +260,7 @@ def main():
         print('Verified: text, tool call, tool result and complete streaming response')
         return
     refresh = action == 'refresh' or '--refresh' in sys.argv[2:]
-    if refresh or not (config / 'envelope.json').exists():
+    if refresh or not (config / 'envelope.json').exists() or not (config / 'native-runtime').exists():
         regenerate(config, values, node, refresh)
     if action == 'prepare':
         save_credentials(config, values)

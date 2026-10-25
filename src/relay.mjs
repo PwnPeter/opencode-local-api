@@ -40,10 +40,11 @@ export function createHandler({ token, complete }) {
           tool?.type === 'function' && typeof tool.function?.name === 'string' && tool.function.name.length > 0))))
       return failure(400, 'Invalid messages, stream flag or function tools')
 
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(300_000)])
     try {
-      return await complete(body, AbortSignal.any([request.signal, AbortSignal.timeout(300_000)]), request.headers)
+      return await complete(body, signal, request.headers)
     } catch (error) {
-      return failure(error.name === 'TimeoutError' ? 504 : 502, 'OpenCode upstream request failed')
+      return failure(error.name === 'TimeoutError' || signal.reason?.name === 'TimeoutError' ? 504 : 502, 'OpenCode upstream request failed')
     }
   }
 }
