@@ -8,6 +8,7 @@
 !scripts/verify.mjs
 !scripts/retest.mjs
 !scripts/write_route.py
+!scripts/usage.py
 !scripts/container.sh
 !scripts/proxies.py
 !scripts/interface_proxy.py

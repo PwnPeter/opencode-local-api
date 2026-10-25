@@ -42,7 +42,7 @@ export function createHandler({ token, complete }) {
 
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(300_000)])
     try {
-      return await complete(body, signal, request.headers)
+      return await complete(body, signal, request.headers, { source: 'relay' })
     } catch (error) {
       return failure(error.name === 'TimeoutError' || signal.reason?.name === 'TimeoutError' ? 504 : 502, 'OpenCode upstream request failed')
     }

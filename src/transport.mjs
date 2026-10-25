@@ -5,6 +5,7 @@ import { fetchIpv4 } from './http.mjs'
 import { createProxyPool, createProxyRefresher, proxiesFromEnv } from './proxy.mjs'
 import { createProjectStore, IPOwnershipError, ProxyExitError } from './projects.mjs'
 import { createNativeFetch } from './native.mjs'
+import { trackUsage } from './usage.mjs'
 
 export function apiKeysFromEnv(env = process.env) {
   return [env.OPENCODE_API_KEY, env.OPENCODE_API_KEY_BACKUP, ...(env.OPENCODE_API_KEYS || '').split(',').map(key => key.trim())]
@@ -85,12 +86,15 @@ export function createTransport(envelope, apiKey, fetchRequest, proxies = proxie
           await record({ phase, started_at: started, status: null, quota_reached: null, error_type: error.name })
           throw error
         }
+        let networkSnapshot
         if (audit) {
           const error = result.ok ? null : (await result.clone().json().catch(() => null))?.error?.type
-          await record({ phase, started_at: started, status: result.status, error_type: error,
+          networkSnapshot = await record({ phase, started_at: started, status: result.status, error_type: error,
             quota_reached: error === 'FreeUsageLimitError' ? true : phase === 'configuration' || (result.status === 429 && !error) ? null : false,
             retry_after: result.headers.get('retry-after') })
         }
+        if (audit && phase === 'inference' && result.ok) return trackUsage(result,
+          entry => record({ ...entry, phase: 'usage', started_at: started, status: result.status, quota_reached: false, network_snapshot: networkSnapshot }))
         return result
       }
       const projectStarted = Date.now()

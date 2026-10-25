@@ -16,7 +16,7 @@ const model = 'deepseek-v4.1-flash-free'
 const nonce = `RELAY_${crypto.randomUUID().replaceAll('-', '')}`
 const base = { model, thinking: { type: 'disabled' }, max_tokens: 256 }
 async function call(body) {
-  const response = await complete({ ...base, ...body }, AbortSignal.timeout(90_000))
+  const response = await complete({ ...base, ...body }, AbortSignal.timeout(90_000), undefined, { source: 'verification' })
   if (!response.ok) throw new Error(`OpenCode rejected the extracted protocol: HTTP ${response.status}`)
   return body.stream ? assembleStream(response) : response.json()
 }

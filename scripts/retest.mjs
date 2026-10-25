@@ -75,7 +75,7 @@ async function main() {
           projects, env, undefined, record)
         const response = await complete({ model: 'deepseek-v4.1-flash-free', thinking: { type: 'disabled' }, max_tokens: 128,
           messages: [{ role: 'user', content: 'Reply exactly SCHEDULED_RETEST_OK. Do not call tools.' }], stream: false },
-          AbortSignal.timeout(35000), undefined, { request_id: requestID })
+          AbortSignal.timeout(35000), undefined, { request_id: requestID, source: 'probe' })
         const data = await response.json().catch(() => null)
         const type = data?.error?.type
         result = { status: response.status, quota_reached: type === 'FreeUsageLimitError' ? true : response.ok ? false : null,
@@ -91,7 +91,7 @@ async function main() {
         seconds: (Date.now() - started) / 1000, ...result }
       results.push(entry)
       await audit({ request_id: requestID, key, public_ip: publicIP, proxy_url: route.proxy?.url || null,
-        interface: route.interface, connection_uuid: route.connection_uuid, phase: 'retest_result', started_at: started, ...result })
+        interface: route.interface, connection_uuid: route.connection_uuid, source: 'probe', phase: 'retest_result', started_at: started, ...result })
       if (selecting && !selected) {
         const candidate = chooseRoute(routes, results, current, productionFingerprints)
         if (candidate) {

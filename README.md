@@ -89,6 +89,7 @@ The relay runs on Node. A small HTTP worker uses the Bun runtime embedded in the
 | `make refresh` | Downloads OpenCode, extracts, tests, and cleans up |
 | `make verify` | Tests the installed protocol against the free model |
 | `make test` | Runs local tests without a key or provider requests |
+| `make usage` | Shows recorded provider token totals for each key/network combination |
 | `docker compose logs -f relay` / `podman compose logs -f relay` | Follows container logs |
 | `docker compose down` / `podman compose down` | Stops the container; keeps credentials and protocol |
 
@@ -233,6 +234,12 @@ Set `RELAY_PREFERRED_REQUIRED=1` to require this mobile route and its selected k
 The running relay and `make verify` append private JSON Lines records to `~/.config/opencode-local-api/attempts.jsonl` (or the equivalent directory under `XDG_CONFIG_HOME`). Each configuration/inference attempt, exit-check failure and cooldown records UTC and Paris time, a shared request ID, model, API key number and stable hashed ID, verified public IP, proxy use and endpoint, network interface, HTTP status, quota result and `Retry-After`/next retry time. Retries remain separate entries, including failures before a later success. A `200` records upstream acceptance; it does not certify that a client consumed the complete stream.
 
 `FreeUsageLimitError` marks an exhausted quota. An unclassified `429`, an unavailable exit and a successful configuration lookup do not establish quota availability. `public_ip` stays `null` until verified; `expected_public_ip` is only the candidate address. API keys, proxy credentials, prompts, responses and session headers are excluded. The file is created with mode `0600` and symbolic links are refused.
+
+Each consumed inference stream adds one `usage` record with the provider's reported input, output, total, cached-input and reasoning token counts, plus whether the stream completed. The same accounting covers streaming Harness requests and nonstreaming API responses; bytes sent to streaming clients are unchanged. The last cumulative usage report is retained once. Missing or invalid counters stay `null`, including responses interrupted before usage arrives. Cache and reasoning counts are details of input/output usage, not additional tokens to add to `total_tokens`.
+
+Usage keeps the network snapshot captured for its inference request, including when the PC changes networks before the response ends. Observation is limited to metadata lines of 64 KiB to bound memory; counters or completion metadata embedded in larger lines remain unknown, while the full client response is preserved.
+
+`source=relay` identifies local client requests, including DeepSeek Harness; automatic route probes use `probe`, and `make verify` uses `verification`. Run `make usage` to sum the reported counters separately by source, model, key fingerprint, public exit, proxy and network connection. Its report includes accepted requests without measured tokens and interrupted streams; reported partial-stream counts remain included. Older records are grouped as `legacy` and have unknown tokens. This reports provider usage, not the provider's undisclosed quota calculation, and cannot reconstruct historical counters that were never recorded.
 
 Private `network-labels.json` beside the log maps NetworkManager connection UUIDs to `{"usb_4g": true, "mobile_data": true}` or the corresponding false values for known fixed connections. Unknown connections retain `null` flags. `network_evidence` distinguishes the verified bound interface, a configured interface whose exit check failed, and a default-route snapshot used for proxy/direct connections; that snapshot is not a packet trace. The local interface-binding CONNECT bridge is not counted as an external exit proxy. This history starts when logging is enabled; older attempts are not reconstructed.
 

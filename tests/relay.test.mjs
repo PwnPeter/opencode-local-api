@@ -85,13 +85,13 @@ test('rejects malformed tool definitions and stream flags before contacting upst
 
 test('passes conversation identity to the transport without forwarding credentials as body fields', async () => {
   let received
-  const handle = createHandler({ token: 'local-test-token', complete: async (body, _signal, headers) => {
-    received = { body, session: headers.get('x-opencode-session') }
+  const handle = createHandler({ token: 'local-test-token', complete: async (body, _signal, headers, context) => {
+    received = { body, session: headers.get('x-opencode-session'), source: context.source }
     return Response.json({ ok: true })
   } })
   const body = { model: 'deepseek-v4.1-flash-free', messages: [{ role: 'user', content: 'hi' }] }
   assert.equal((await handle(request(body, { 'x-opencode-session': 'conversation-1' }))).status, 200)
-  assert.deepEqual(received, { body, session: 'conversation-1' })
+  assert.deepEqual(received, { body, session: 'conversation-1', source: 'relay' })
 })
 
 test('preserves messages, tool results, reasoning and parameters while separating credentials', async () => {

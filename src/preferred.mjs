@@ -73,7 +73,7 @@ export async function createPreferredTransport(envelope, keys, fallback, project
   const complete = async (body, signal, headers, context = {}) => {
     const requestID = context.request_id || randomUUID()
     const started = Date.now()
-    const connection = { request_id: requestID, interface: env.RELAY_PREFERRED_INTERFACE,
+    const connection = { ...context, request_id: requestID, interface: env.RELAY_PREFERRED_INTERFACE,
       connection_uuid: env.RELAY_PREFERRED_CONNECTION_UUID || null }
     let dispatched = false
     try {
@@ -113,7 +113,7 @@ export async function createPreferredTransport(envelope, keys, fallback, project
     }
     if (required) return Response.json({ error: { type: 'mobile_route_unavailable', message: 'The configured mobile connection is unavailable.' } },
       { status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '5' } })
-    return fallback(body, signal, headers, { request_id: requestID })
+    return fallback(body, signal, headers, { ...context, request_id: requestID })
   }
   return Object.assign(complete, { isAvailable: () => !child.killed && child.exitCode === null && child.signalCode === null,
     async close() { process.off('exit', stop); if (child.exitCode === null && child.signalCode === null) { stop(); await once(child, 'close') } } })

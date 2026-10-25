@@ -115,7 +115,7 @@ test('records mobile success, quota cooldown and outage without treating the loc
   broken = true
   await (await complete(body, AbortSignal.timeout(3000))).body.cancel()
   assert.deepEqual(entries.map(e => [e.phase, e.status, e.quota_reached]), [
-    ['inference', 200, false], ['inference', 429, true], ['cooldown', null, true], ['exit_check', null, null],
+    ['inference', 200, false], ['usage', 200, false], ['inference', 429, true], ['cooldown', null, true], ['exit_check', null, null],
   ])
   assert.ok(entries.every(e => e.key === 'third' && e.proxy_url === null && e.interface === 'lo'))
   assert.equal(entries[0].public_ip, '198.51.100.9')

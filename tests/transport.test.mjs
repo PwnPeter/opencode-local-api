@@ -46,7 +46,7 @@ test('records the rejected quota route before rotating to a successful key and e
   const response = await complete({ model: 'deepseek-v4.1-flash-free', messages: [{ role: 'user', content: 'private prompt' }] }, AbortSignal.timeout(3000))
   assert.equal(response.status, 200)
   await response.body.cancel()
-  assert.deepEqual(entries.map(e => [e.key, e.public_ip, e.status, e.quota_reached]), [
+  assert.deepEqual(entries.filter(e => e.phase === 'inference').map(e => [e.key, e.public_ip, e.status, e.quota_reached]), [
     ['first-fixture', '198.51.100.1', 429, true], ['second-fixture', '198.51.100.2', 200, false],
   ])
   assert.equal(entries[0].retry_after, '120')
@@ -65,7 +65,8 @@ test('direct audit entries use the freshly verified exit rather than the previou
   const complete = createTransport(envelope, 'key-fixture', async () => new Response(fixture), null, null, projects,
     entry => entries.push(entry))
   for (let i = 0; i < 2; i++) await (await complete({ messages: [], stream: true }, AbortSignal.timeout(3000))).body.cancel()
-  assert.deepEqual(entries.map(e => [e.public_ip, e.proxy_url]), [['198.51.100.31', null], ['198.51.100.32', null]])
+  assert.deepEqual(entries.filter(e => e.phase === 'inference').map(e => [e.public_ip, e.proxy_url]), [['198.51.100.31', null], ['198.51.100.32', null]])
+  assert.deepEqual(entries.filter(e => e.phase === 'usage').map(e => e.public_ip), ['198.51.100.31', '198.51.100.32'])
 })
 
 test('a malformed configured pool cannot disable proxy confinement', t => {

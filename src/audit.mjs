@@ -50,6 +50,7 @@ export function createAttemptLogger(keys, file = join(dirname(projectStoreFile()
   closeSync(open())
   const safe = (value, length = 128) => typeof value === 'string' && value.length <= length &&
     !/[\x00-\x1f]/.test(value) && !known.some(key => value.includes(key)) ? value : null
+  const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null
   return async entry => {
     try {
       const now = new Date()
@@ -57,24 +58,40 @@ export function createAttemptLogger(keys, file = join(dirname(projectStoreFile()
       if (entry.proxy_url) { const url = new URL(entry.proxy_url); proxy = safe(url.protocol + '//' + url.host) }
       const retry = safe(entry.retry_after)
       const retryTime = retry && /^\d+$/.test(retry) ? now.getTime() + Number(retry) * 1000 : Date.parse(retry)
+      const snapshot = entry.network_snapshot
+      const network = snapshot && typeof snapshot === 'object' ? {
+        interface: safe(snapshot.interface), connection_uuid: safe(snapshot.connection_uuid),
+        network_evidence: ['bound_interface', 'configured_interface', 'route_snapshot'].includes(snapshot.network_evidence) ? snapshot.network_evidence : null,
+        usb_4g: typeof snapshot.usb_4g === 'boolean' ? snapshot.usb_4g : null,
+        mobile_data: typeof snapshot.mobile_data === 'boolean' ? snapshot.mobile_data : null,
+      } : await networkFor(entry, labels)
       const row = {
         timestamp: now.toISOString(), time_paris: paris.format(now) + ' Europe/Paris',
         started_at: new Date(entry.started_at ?? now.getTime()).toISOString(),
         duration_ms: Math.max(0, now.getTime() - (entry.started_at ?? now.getTime())),
         request_id: safe(entry.request_id), phase: safe(entry.phase), model: safe(entry.model),
+        source: ['relay', 'probe', 'verification'].includes(entry.source) ? entry.source : null,
         key_number: known.indexOf(entry.key) < 0 ? null : known.indexOf(entry.key) + 1,
         key_id: typeof entry.key === 'string' ? createHash('sha256').update(entry.key).digest('hex').slice(0, 12) : null,
         public_ip: isIP(entry.public_ip || '') ? entry.public_ip : null,
         expected_public_ip: isIP(entry.expected_public_ip || '') ? entry.expected_public_ip : null,
         proxy_used: Boolean(entry.proxy_url), proxy_url: proxy,
-        ...await networkFor(entry, labels),
+        ...network,
         status: Number.isInteger(entry.status) ? entry.status : null,
         quota_reached: typeof entry.quota_reached === 'boolean' ? entry.quota_reached : null,
         error_type: safe(entry.error_type, 80), retry_after: retry,
         retry_at: Number.isFinite(retryTime) && Math.abs(retryTime) <= 8.64e15 ? new Date(retryTime).toISOString() : null,
+        stream_complete: typeof entry.stream_complete === 'boolean' ? entry.stream_complete : null,
+        usage: entry.usage && typeof entry.usage === 'object' && !Array.isArray(entry.usage) ? {
+          prompt_tokens: count(entry.usage.prompt_tokens), completion_tokens: count(entry.usage.completion_tokens),
+          total_tokens: count(entry.usage.total_tokens),
+          cached_tokens: count(entry.usage.prompt_tokens_details?.cached_tokens ?? entry.usage.opencode?.tokens?.cache_read),
+          reasoning_tokens: count(entry.usage.completion_tokens_details?.reasoning_tokens ?? entry.usage.opencode?.tokens?.reasoning),
+        } : null,
       }
       const fd = open()
       try { writeFileSync(fd, JSON.stringify(row) + '\n') } finally { closeSync(fd) }
+      return network
     } catch { console.error('Attempt audit write failed; request handling continues') }
   }
 }

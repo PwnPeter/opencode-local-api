@@ -56,3 +56,25 @@ test('audit storage refuses symbolic links without altering their target', t => 
   assert.throws(() => createAttemptLogger(['key'], file), /ELOOP|link/i)
   assert.equal(readFileSync(target, 'utf8'), 'preserve')
 })
+
+test('usage records whitelist actual counters, preserve unknowns and keep probes separate from relay clients', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'relay-usage-audit-'))
+  t.after(() => rmSync(directory, { recursive: true, force: true }))
+  const file = join(directory, 'attempts.jsonl')
+  const log = createAttemptLogger(['private-key'], file)
+  const base = { key: 'private-key', phase: 'usage', interface: 'test', connection_uuid: 'fixture', status: 200 }
+  await log({ ...base, source: 'relay', stream_complete: true, usage: { prompt_tokens: 100, completion_tokens: 20,
+    total_tokens: 120, prompt_tokens_details: { cached_tokens: 60 }, completion_tokens_details: { reasoning_tokens: 5 },
+    private: 'private-key' } })
+  await log({ ...base, source: 'probe', stream_complete: false, usage: { prompt_tokens: -1,
+    completion_tokens: '20', total_tokens: Infinity, prompt_tokens_details: { cached_tokens: 0 } } })
+  await log({ ...base, usage: null })
+  const raw = readFileSync(file, 'utf8'), rows = raw.trim().split('\n').map(JSON.parse)
+  assert.equal(rows[0].source, 'relay')
+  assert.equal(rows[0].stream_complete, true)
+  assert.deepEqual(rows[0].usage, { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120, cached_tokens: 60, reasoning_tokens: 5 })
+  assert.equal(rows[1].source, 'probe')
+  assert.deepEqual(rows[1].usage, { prompt_tokens: null, completion_tokens: null, total_tokens: null, cached_tokens: 0, reasoning_tokens: null })
+  assert.equal(rows[2].usage, null)
+  assert.ok(!raw.includes('private-key'))
+})
