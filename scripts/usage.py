@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Summarize private provider token counters by key and observed network route."""
+import argparse
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -9,7 +11,7 @@ FIELDS = ('source', 'model', 'key_id', 'public_ip', 'proxy_url', 'interface', 'c
 TOKENS = ('prompt_tokens', 'completion_tokens', 'total_tokens', 'cached_tokens', 'reasoning_tokens')
 
 
-def summarize(path):
+def summarize(path, since=None, until=None):
     groups = {}
     if not path.exists():
         return {'combinations': []}
@@ -20,6 +22,10 @@ def summarize(path):
             row = json.loads(line)
             if row.get('phase') not in ['inference', 'usage']:
                 continue
+            if since is not None or until is not None:
+                settled = datetime.fromisoformat(row.get('timestamp') or row['started_at'])
+                if (since is not None and settled < since) or (until is not None and settled >= until):
+                    continue
             row['source'] = row.get('source') or 'legacy'
             identity = tuple(row.get(field) for field in FIELDS)
             if identity not in groups:
@@ -52,9 +58,13 @@ def summarize(path):
 
 
 if __name__ == '__main__':
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'opencode-local-api/attempts.jsonl'
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('journal', nargs='?', type=Path, default=Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'opencode-local-api/attempts.jsonl')
+    parser.add_argument('--since', type=datetime.fromisoformat, help='include records settled at or after this ISO timestamp')
+    parser.add_argument('--until', type=datetime.fromisoformat, help='exclude records settled at or after this ISO timestamp')
+    args = parser.parse_args()
     try:
-        print(json.dumps(summarize(path), indent=2))
-    except (OSError, ValueError, TypeError):
+        print(json.dumps(summarize(args.journal, args.since, args.until), indent=2))
+    except (OSError, ValueError, TypeError, KeyError):
         print('Usage journal unavailable or invalid', file=sys.stderr)
         sys.exit(1)

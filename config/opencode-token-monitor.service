@@ -1,0 +1,9 @@
+[Unit]
+Description=Compare native Harness and local proxy token counters
+
+[Service]
+Type=oneshot
+UMask=0077
+WorkingDirectory=@PROJECT@
+ExecStart=@NODE@ @PROJECT@/scripts/monitor.mjs @CONFIG@
+TimeoutStartSec=45s

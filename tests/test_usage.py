@@ -57,6 +57,24 @@ class UsageSummaryTests(unittest.TestCase):
             self.assertEqual(json.loads(result.stdout), {'combinations': []})
             self.assertEqual(list(Path(tmp).iterdir()), [])
 
+    def test_since_uses_settlement_time_so_pending_requests_keep_their_reported_usage(self):
+        script = Path(__file__).resolve().parents[1] / 'scripts' / 'usage.py'
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / 'attempts.jsonl'
+            base = {'source': 'relay', 'key_id': '111111111111', 'key_number': 1, 'public_ip': '198.51.100.1'}
+            rows = [
+                {**base, 'timestamp': '2026-10-26T00:00:00Z', 'request_id': 'old', 'phase': 'usage', 'usage': {'total_tokens': 999}},
+                {**base, 'timestamp': '2026-10-26T00:02:00Z', 'started_at': '2026-10-26T00:00:00Z',
+                 'request_id': 'pending', 'phase': 'usage', 'usage': {'total_tokens': 120}},
+                {**base, 'timestamp': '2026-10-26T00:04:00Z', 'request_id': 'later', 'phase': 'usage', 'usage': {'total_tokens': 888}},
+            ]
+            log.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+            result = subprocess.run(['python3', str(script), str(log), '--since', '2026-10-26T01:01:00+01:00', '--until', '2026-10-26T00:03:00Z'],
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            groups = json.loads(result.stdout)['combinations']
+            self.assertEqual(groups[0]['tokens']['total_tokens'], 120)
+
 
 if __name__ == '__main__':
     unittest.main()
