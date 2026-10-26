@@ -6,6 +6,12 @@
         api: openai-completions
         baseURL: http://127.0.0.1:4097/v1
         apiKeyEnv: OPENCODE_LOCAL_API_KEY
+        retryPolicy:
+          mode: always
+          backoff:
+            initialDelayMs: 3000
+            maxDelayMs: 30000
+            jitterRatio: 0.1
         compat:
           supportsDeveloperRole: false
           maxTokensField: max_tokens
