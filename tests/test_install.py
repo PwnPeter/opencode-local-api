@@ -174,7 +174,8 @@ class InstallTests(unittest.TestCase):
             config = Path(tmp)
             preferred = {'RELAY_PREFERRED_INTERFACE': 'wlp3s0', 'RELAY_PREFERRED_KEY_FINGERPRINT': 'a' * 64, 'RELAY_PREFERRED_REQUIRED': '1',
                          'RELAY_PREFERRED_CONNECTION_UUID': '2806a8ec-4cc7-45c7-afdc-bb71468efd13',
-                         'RELAY_PINNED_ROUTE_FILE': str(config / 'pinned-route.json')}
+                         'RELAY_PINNED_ROUTE_FILE': str(config / 'pinned-route.json'),
+                         'RELAY_ROUTE_PLAN_FILE': str(config / 'retest-plan.auto.json')}
             with patch.dict(os.environ, {'OPENCODE_API_KEY': 'fixture', **preferred}, clear=True):
                 values = installer.credentials(config)
                 installer.save_credentials(config, values)

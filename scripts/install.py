@@ -83,7 +83,7 @@ def credentials(config):
         proxy_file = str(config / 'proxies.json')
     if proxy_file:
         values['RELAY_PROXIES_FILE'] = proxy_file
-    for name in ['RELAY_PREFERRED_INTERFACE', 'RELAY_PREFERRED_KEY_FINGERPRINT', 'RELAY_PREFERRED_CONNECTION_UUID', 'RELAY_PREFERRED_REQUIRED', 'RELAY_PINNED_ROUTE_FILE']:
+    for name in ['RELAY_PREFERRED_INTERFACE', 'RELAY_PREFERRED_KEY_FINGERPRINT', 'RELAY_PREFERRED_CONNECTION_UUID', 'RELAY_PREFERRED_REQUIRED', 'RELAY_PINNED_ROUTE_FILE', 'RELAY_ROUTE_PLAN_FILE']:
         value = os.environ.get(name) or existing.get(name)
         if value:
             values[name] = value

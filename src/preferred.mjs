@@ -7,13 +7,12 @@ import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { createNativeFetch } from './native.mjs'
 import { createTransport } from './transport.mjs'
-import { routeConfig, routeIdentity } from './routes.mjs'
+import { routeConfig, routeIdentity, writeRoute } from './routes.mjs'
 
 export async function createPreferredTransport(envelope, keys, fallback, projects, env = process.env, fetchRequest = createNativeFetch(), audit) {
   if (env.RELAY_PINNED_ROUTE_FILE) {
     const delegates = new Map()
-    const load = async () => {
-      const pinned = routeConfig(JSON.parse(readFileSync(env.RELAY_PINNED_ROUTE_FILE, 'utf8')))
+    const load = async (pinned = routeConfig(JSON.parse(readFileSync(env.RELAY_PINNED_ROUTE_FILE, 'utf8')))) => {
       const id = routeIdentity(pinned)
       const previous = delegates.get(id)
       if (previous && (await previous).isAvailable?.() === false && delegates.get(id) === previous) delegates.delete(id)
@@ -37,9 +36,73 @@ export async function createPreferredTransport(envelope, keys, fallback, project
       }
       return delegates.get(id)
     }
-    await load()
+    const configured = current => {
+      const plan = JSON.parse(readFileSync(env.RELAY_ROUTE_PLAN_FILE, 'utf8'))
+      if (!Array.isArray(plan.routes) || !plan.routes.length || plan.routes.length > 8) throw Error('Invalid production route plan')
+      const allowed = new Set(keys.filter(Boolean).map(key => createHash('sha256').update(key).digest('hex')))
+      const permitted = plan.routes.map(routeConfig).filter(route => allowed.has(route.key_fingerprint))
+      const routes = [...new Map(permitted.map(route => [routeIdentity(route), route])).values()]
+      if (!routes.some(route => routeIdentity(route) === routeIdentity(current))) throw Error('Active route is missing from production plan')
+      return routes
+    }
+    const initial = routeConfig(JSON.parse(readFileSync(env.RELAY_PINNED_ROUTE_FILE, 'utf8')))
+    if (env.RELAY_ROUTE_PLAN_FILE) configured(initial)
+    await load(initial)
+    const retryable = async response => {
+      if ([401, 403, 502, 504].includes(response.status)) return true
+      if (![429, 503].includes(response.status)) return false
+      const type = (await response.clone().json().catch(() => null))?.error?.type
+      return response.status === 429 ? type === 'FreeUsageLimitError' : type === 'mobile_route_unavailable'
+    }
+    const retain = async response => new Response(await response.arrayBuffer(), { status: response.status, headers: response.headers })
+    const complete = async (body, signal, headers, context = {}) => {
+      if (!env.RELAY_ROUTE_PLAN_FILE) return (await load())(body, signal, headers, context)
+      signal?.throwIfAborted()
+      const snapshot = readFileSync(env.RELAY_PINNED_ROUTE_FILE, 'utf8'), current = routeConfig(JSON.parse(snapshot))
+      const routes = configured(current)
+      const request = { ...context, request_id: context.request_id || randomUUID() }
+      const ensureActive = async response => {
+        if (signal?.aborted) {
+          try { await response.body?.cancel(signal.reason) } catch {}
+          throw signal.reason
+        }
+      }
+      let failure, firstError
+      try {
+        const response = await (await load(current))(body, signal, headers, request)
+        await ensureActive(response)
+        if (!(await retryable(response))) return response
+        failure = await retain(response)
+      } catch (error) { if (signal?.aborted) throw signal.reason; firstError = error }
+      for (const route of routes) {
+        if (routeIdentity(route) === routeIdentity(current)) continue
+        signal?.throwIfAborted()
+        try {
+          const delegate = await load(route)
+          const probe = await delegate({ model: body.model || 'deepseek-v4.1-flash-free', thinking: { type: 'disabled' }, max_tokens: 128,
+            messages: [{ role: 'user', content: 'Reply exactly FAILOVER_ROUTE_OK. Do not call tools.' }], stream: false },
+            AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(35000)]), undefined,
+            { source: 'probe', request_id: 'failover-check-' + randomUUID() })
+          const data = await probe.json().catch(() => null)
+          if (probe.status !== 200 || data?.choices?.[0]?.finish_reason == null ||
+              !data?.choices?.[0]?.message?.content?.includes('FAILOVER_ROUTE_OK')) continue
+          signal?.throwIfAborted()
+          const response = await delegate(body, signal, headers, request)
+          await ensureActive(response)
+          if (response.status === 200) {
+            try { writeRoute(env.RELAY_PINNED_ROUTE_FILE, route, snapshot) }
+            catch { console.error('Verified route publication failed; existing selection retained') }
+            return response
+          }
+          if (!(await retryable(response))) return response
+          failure = await retain(response)
+        } catch (error) { if (signal?.aborted) throw signal.reason; firstError ??= error }
+      }
+      if (failure) return failure
+      throw firstError || Error('No configured route is available')
+    }
     // shortcut: retain the configured delegates until exit so route changes cannot close an active stream.
-    return Object.assign(async (...args) => (await load())(...args), {
+    return Object.assign(complete, {
       async close() { await Promise.allSettled([...delegates.values()].map(async entry => (await entry).close?.())) },
     })
   }
